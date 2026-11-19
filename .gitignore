@@ -1,0 +1,5 @@
+node_modules/
+lib/
+.bench-tmp/
+*.tsbuildinfo
+.DS_Store

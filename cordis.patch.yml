@@ -1,0 +1,158 @@
+# dsh-orchestration bundle patch.
+#
+# 1. Registers the Host plane plugin (single `orchestrate_subagent` tool, root
+#    scheduling policy, delegation telemetry, per-child guards).
+# 2. Declares four internal Agent presets selected only by that tool. They are
+#    hidden from the session-mode selector by the plugin itself.
+#
+# Read-only presets (`explore`, `plan`, `dsh-code-guide`) omit `agent-instructions`
+# and `tool-skill`; the plugin additionally strips any host-plane instruction or
+# skill-catalog message for them, so workspace instructions do not bloat their
+# context. `general-purpose` keeps `agent-instructions` so project rules still
+# apply to implementation children.
+- insert:
+    - id: dsh-orchestration
+      name: dsh-orchestration
+      config: {}
+
+    - id: preset-dsh-orchestration-explore
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-orchestration-explore
+        name: Orchestration Explore
+        description: Internal read-only exploration preset used by dsh-orchestration.
+        order: 900
+        plugins:
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: false
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              toolResultPruner: true
+            config:
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 4096
+                  headChars: 2048
+                  tailChars: 512
+
+    - id: preset-dsh-orchestration-plan
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-orchestration-plan
+        name: Orchestration Plan
+        description: Internal read-only planning preset used by dsh-orchestration.
+        order: 901
+        plugins:
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: false
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              toolResultPruner: true
+            config:
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 16384
+                  headChars: 8192
+                  tailChars: 2048
+
+    - id: preset-dsh-orchestration-general-purpose
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-orchestration-general-purpose
+        name: Orchestration General Purpose
+        description: Internal general-purpose execution preset used by dsh-orchestration.
+        order: 902
+        plugins:
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              write: true
+              edit: true
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+
+    - id: preset-dsh-orchestration-guide
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-orchestration-guide
+        name: Orchestration DSH Code Guide
+        description: Internal read-only DSH and Cordis guidance preset used by dsh-orchestration.
+        order: 903
+        plugins:
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: false
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              toolResultPruner: true
+            config:
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 12288
+                  headChars: 6144
+                  tailChars: 1536
