@@ -163,6 +163,7 @@ describe('root scheduling guidance', () => {
                 getSectionOrder: vi.fn(() => 10),
               },
               on: vi.fn(() => () => {}),
+              effect: vi.fn((cb: () => unknown) => { cb() }),
               logger: { info: vi.fn(), warn: vi.fn() },
               get: vi.fn(() => undefined),
             })

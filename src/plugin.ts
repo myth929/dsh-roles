@@ -1,9 +1,9 @@
 /**
- * Host-plugin entry for the `dsh-roles` bundle.
+ * Explicit plugin-shaped re-export of the `dsh-roles` host plugin entry.
  *
- * The bundle package itself owns `cordis.patch.yml`; loading that package as a
- * plugin row can be resolved as another bundle inclusion. This subpath gives
- * the patch an unambiguously plugin-shaped entry, mirroring other bundles.
+ * Allows consumers to import the Cordis plugin exports (`apply`, `Config`,
+ * `inject`, `name`) directly via `dsh-roles/plugin` without loading bundle
+ * metadata or auxiliary helpers.
  * @module dsh-roles/plugin
  */
 

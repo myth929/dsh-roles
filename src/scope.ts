@@ -8,7 +8,7 @@
  * @module dsh-roles/scope
  */
 
-import { existsSync, realpathSync } from 'node:fs'
+import { realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /** One validated workspace-relative write prefix. */
@@ -130,16 +130,23 @@ export function effectiveSessionCwd(
 
 /**
  * Whether one target path stays inside one declared scope.
- * @param cwd - session working directory.
+ * @param cwd - effective session directory used to resolve relative `filePath` values.
  * @param filePath - model-supplied path, relative to `cwd` or absolute.
  * @param scopes - checked scopes for this worker.
+ * @param scopeBaseCwd - workspace directory anchoring the declared scope prefixes (defaults to `cwd`).
  * @returns true when the canonical target is inside a canonical scope root.
  */
-export function isWriteAllowed(cwd: string, filePath: string, scopes: readonly NormalizedScope[]): boolean {
+export function isWriteAllowed(
+  cwd: string,
+  filePath: string,
+  scopes: readonly NormalizedScope[],
+  scopeBaseCwd: string = cwd,
+): boolean {
   const cwdReal = canonicalPath(cwd)
+  const scopeBaseReal = scopeBaseCwd === cwd ? cwdReal : canonicalPath(scopeBaseCwd)
   const targetReal = canonicalPath(resolve(cwdReal, filePath))
   return scopes.some((scope) => {
-    const scopeReal = canonicalPath(join(cwdReal, scope.prefix))
+    const scopeReal = canonicalPath(join(scopeBaseReal, scope.prefix))
     return isInside(scopeReal, targetReal)
   })
 }
@@ -170,6 +177,7 @@ export const WRITE_TOOL_NAMES = new Set(['write', 'edit', 'apply_patch'])
  * @param args - validated tool arguments.
  * @param cwd - effective session directory at execution time.
  * @param scopes - declared worker scopes.
+ * @param scopeBaseCwd - workspace directory anchoring the declared scope prefixes (defaults to `cwd`).
  * @returns the denial reason, or undefined when the call is allowed.
  */
 export function writeScopeDenial(
@@ -177,6 +185,7 @@ export function writeScopeDenial(
   args: unknown,
   cwd: string,
   scopes: readonly NormalizedScope[],
+  scopeBaseCwd: string = cwd,
 ): string | undefined {
   if (!WRITE_TOOL_NAMES.has(name)) return undefined
   const paths = name === 'apply_patch'
@@ -187,7 +196,7 @@ export function writeScopeDenial(
   }
   const outside = paths.filter(path => {
     try {
-      return !isWriteAllowed(cwd, path, scopes)
+      return !isWriteAllowed(cwd, path, scopes, scopeBaseCwd)
     } catch {
       return true
     }
@@ -273,9 +282,4 @@ export class WorkerWriteCoordinator {
       },
     }
   }
-}
-
-/** Whether a path exists; exported for the guard's tests. */
-export function pathExists(path: string): boolean {
-  return existsSync(path)
 }

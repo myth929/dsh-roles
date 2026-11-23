@@ -280,14 +280,17 @@ export function isolateRoleTools(
 /**
  * Enforce a `general-purpose` worker's declared write prefixes on `write`, `edit`,
  * and `apply_patch`, resolving symlinks on the target's existing ancestors.
+ * Scope prefixes stay anchored to the worker's initial `baseCwd` even if the
+ * child later emits `working-directory/change`, while relative targets resolve
+ * against the child's current effective directory.
  * @param agent - the child agent.
  * @param scopes - checked workspace-relative prefixes.
- * @param cwd - current session directory at child creation.
+ * @param baseCwd - initial session directory anchoring the declared scopes.
  */
-export function enforceWriteScope(agent: Agent, scopes: readonly NormalizedScope[], cwd: string): void {
+export function enforceWriteScope(agent: Agent, scopes: readonly NormalizedScope[], baseCwd: string): void {
   agent.ctx.tools.guard((exec) => {
-    const current = effectiveSessionCwd(agent.session, cwd)
-    const denial = writeScopeDenial(exec.name, exec.arguments, current, scopes)
+    const current = effectiveSessionCwd(agent.session, baseCwd)
+    const denial = writeScopeDenial(exec.name, exec.arguments, current, scopes, baseCwd)
     return denial === undefined ? undefined : {
       reason: denial,
       info: { name: 'dsh-roles', code: 'WRITE_SCOPE_VIOLATION' },

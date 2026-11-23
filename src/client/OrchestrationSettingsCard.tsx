@@ -1,14 +1,28 @@
 /** Browser configuration card rendered on the Plugins page for `dsh-roles`. */
 
-import { useId } from 'react'
-import { SettingsForm, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useId, useMemo, useRef, useState } from 'react'
+import {
+  IconChevronDownOutlineRegular,
+  Menu,
+  SettingsForm,
+  Tag,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, ObservableSnapshot, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   CONFIGURABLE_ROLES,
+  decodeRoleSelection,
   encodeLlmSelection,
   encodeSubagentSelection,
+  partitionExternalProviders,
+  shortPluginName,
 } from './controller.js'
-import type { ConfigurableRole, OrchestrationCardState } from './controller.js'
+import type {
+  ConfigurableRole,
+  ExternalProviderItem,
+  NativePluginCatalogEntry,
+  OrchestrationCardState,
+} from './controller.js'
 import { formLabels, NS } from './locales.js'
 import type { OrchestrationLocaleKey } from './locales.js'
 
@@ -297,47 +311,183 @@ const CARD_CSS = `
   line-height: 1.3;
   color: var(--dsw-alias-label-tertiary);
 }
-.dsh-orch-select-wrap {
-  position: relative;
+.dsh-orch-menu-root {
   display: flex;
-  align-items: center;
+  width: 100%;
   min-width: 0;
 }
-.dsh-orch-select {
-  appearance: none;
-  -webkit-appearance: none;
+.dsh-orch-menu-list {
+  padding: 6px;
+  max-width: min(640px, calc(100vw - 24px));
+}
+.dsh-orch-menu-list [role="presentation"] > [role="presentation"] {
+  padding: 7px 10px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-orch-menu-list [role="separator"] {
+  margin: 5px 8px;
+}
+.dsh-orch-menu-list button[role="menuitem"] {
+  min-height: 36px;
+  padding: 6px 10px;
+  gap: 8px;
+  border-radius: var(--dsw-radius-md);
+  transition: background-color 110ms ease, color 110ms ease;
+}
+.dsh-orch-menu-list button[role="menuitem"]:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+.dsh-orch-menu-list button[role="menuitem"]:has(.dsh-orch-option-row[data-selected="true"]) {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 9%, transparent);
+  box-shadow: inset 2.5px 0 0 var(--dsw-alias-state-business-primary, #3b82f6);
+}
+@media (hover: hover) {
+  .dsh-orch-menu-list button[role="menuitem"]:has(.dsh-orch-option-row[data-selected="true"]):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 13%, transparent);
+  }
+}
+.dsh-orch-menu-list button[role="menuitem"]:has(.dsh-orch-option-row[data-selected="true"]):focus-visible {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 13%, transparent);
+}
+.dsh-orch-menu-list button[role="menuitem"]:has(.dsh-orch-option-row[data-selected="true"]) > span:first-child,
+.dsh-orch-menu-list button[role="menuitem"]:has(.dsh-orch-option-row[data-selected="true"]) > svg:last-child {
+  color: var(--dsw-alias-state-business-primary, #3b82f6);
+}
+.dsh-orch-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   width: 100%;
   min-width: 0;
   height: 36px;
-  padding: 0 32px 0 11px;
+  padding: 0 11px;
   border-radius: var(--dsw-radius-md);
   border: 0.5px solid var(--dsw-alias-border-l4);
-  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-layer-3));
+  background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
+  text-align: start;
   cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
 }
-.dsh-orch-select:hover:not(:disabled) {
-  border-color: var(--dsw-alias-label-tertiary);
+@media (hover: hover) {
+  .dsh-orch-select-trigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    border-color: var(--dsw-alias-border-selected, var(--dsw-alias-label-tertiary));
+  }
 }
-.dsh-orch-select:focus-visible {
+.dsh-orch-select-trigger[data-open="true"]:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 14%, transparent);
+}
+.dsh-orch-select-trigger:focus-visible {
   outline: none;
   border-color: var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 14%, transparent);
 }
-.dsh-orch-select:disabled {
+.dsh-orch-select-trigger:disabled {
+  color: var(--dsw-alias-label-tertiary);
   opacity: 0.6;
-  cursor: not-allowed;
+  cursor: default;
+}
+.dsh-orch-select-leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-orch-select-trigger[data-active="true"] .dsh-orch-select-leading {
+  color: var(--dsw-alias-state-business-primary, #3b82f6);
+}
+.dsh-orch-select-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.dsh-orch-select-primary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-orch-select-trigger[data-active="true"] .dsh-orch-select-primary {
+  font-weight: 500;
+}
+.dsh-orch-select-meta,
+.dsh-orch-option-meta {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-sm, 5px);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dsw-alias-label-tertiary);
 }
 .dsh-orch-select-chevron {
-  position: absolute;
-  right: 10px;
+  flex: none;
   width: 14px;
   height: 14px;
-  pointer-events: none;
   color: var(--dsw-alias-label-tertiary);
+  transition: transform 140ms ease;
+}
+.dsh-orch-select-trigger[data-open="true"] .dsh-orch-select-chevron {
+  transform: rotate(180deg);
+}
+.dsh-orch-option-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.dsh-orch-option-primary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-orch-option-row[data-selected="true"] .dsh-orch-option-primary {
+  font-weight: 550;
+  color: var(--dsw-alias-state-business-primary, var(--dsw-alias-label-primary));
+}
+.dsh-orch-option-row[data-selected="true"] .dsh-orch-option-meta {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 24%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #3b82f6) 10%, transparent);
+  color: var(--dsw-alias-state-business-primary, var(--dsw-alias-label-secondary));
+}
+.dsh-orch-option-row[data-tone="warn"] .dsh-orch-option-primary {
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary, #d97706));
+}
+.dsh-orch-option-trailing-hint {
+  flex: none;
+  margin-inline-start: auto;
+  padding-inline-start: 12px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
 }
 .dsh-orch-locked-bar {
   display: inline-flex;
@@ -497,23 +647,6 @@ function SparkIcon() {
   )
 }
 
-function ChevronIcon() {
-  return (
-    <svg
-      className="dsh-orch-select-chevron"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m4.25 6.25 3.75 3.75 3.75-3.75" />
-    </svg>
-  )
-}
-
 function LockIcon() {
   return (
     <svg
@@ -530,6 +663,199 @@ function LockIcon() {
       <rect x="3.25" y="7.25" width="9.5" height="6.5" rx="1.5" />
       <path d="M5.5 7.25V5a2.5 2.5 0 0 1 5 0v2.25" />
     </svg>
+  )
+}
+
+type RouteOptionKind = 'inherit' | 'oar' | 'native' | 'llm' | 'effort' | 'warn'
+
+interface OptionDisplay {
+  readonly primary: string
+  readonly meta?: string
+  readonly kind: RouteOptionKind
+}
+
+function OptionKindGlyph({ kind }: { kind: RouteOptionKind }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.45,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+  switch (kind) {
+    case 'inherit':
+      return (
+        <svg {...common}>
+          <path d="M5.5 3.5v5a3 3 0 0 0 3 3h4" />
+          <path d="m10 9 2.5 2.5L10 14" />
+        </svg>
+      )
+    case 'oar':
+      return (
+        <svg {...common}>
+          <rect x="2.25" y="3" width="11.5" height="10" rx="2" />
+          <path d="m5.25 6.75 2 1.5-2 1.5" />
+          <path d="M8.75 9.75h2.25" />
+        </svg>
+      )
+    case 'native':
+      return (
+        <svg {...common}>
+          <path d="M8 2.25 13 5v6l-5 2.75L3 11V5l5-2.75Z" />
+          <path d="M8 7.75V13.75" />
+          <path d="M13 5 8 7.75 3 5" />
+        </svg>
+      )
+    case 'llm':
+      return (
+        <svg {...common}>
+          <path d="M8 2.25 9.45 6.15 13.25 7.5 9.45 8.85 8 12.75 6.55 8.85 2.75 7.5 6.55 6.15 8 2.25Z" />
+        </svg>
+      )
+    case 'effort':
+      return (
+        <svg {...common}>
+          <path d="M3.5 12V9.5" />
+          <path d="M8 12V6.5" />
+          <path d="M12.5 12V3.75" />
+        </svg>
+      )
+    case 'warn':
+      return (
+        <svg {...common}>
+          <path d="M8 2.75 13.5 12.5h-11L8 2.75Z" />
+          <path d="M8 6.5v2.75" />
+          <circle cx="8" cy="11" r="0.5" fill="currentColor" stroke="none" />
+        </svg>
+      )
+  }
+}
+
+function OptionRow({
+  primary,
+  meta,
+  trailingHint,
+  selected,
+  tone,
+}: {
+  readonly primary: string
+  readonly meta?: string
+  readonly trailingHint?: string
+  readonly selected: boolean
+  readonly tone?: 'warn'
+}) {
+  return (
+    <span
+      className="dsh-orch-option-row"
+      data-selected={selected ? 'true' : 'false'}
+      data-tone={tone}
+    >
+      <span className="dsh-orch-option-primary">{primary}</span>
+      {meta !== undefined ? <span className="dsh-orch-option-meta">{meta}</span> : null}
+      {trailingHint !== undefined ? <span className="dsh-orch-option-trailing-hint">{trailingHint}</span> : null}
+    </span>
+  )
+}
+
+function describeNativePlugin(
+  entry: NativePluginCatalogEntry,
+  t: (key: OrchestrationLocaleKey, params?: Record<string, string>) => string,
+): OptionDisplay {
+  const pluginTag = shortPluginName(entry.plugin)
+  const model = entry.provider?.model
+  if (entry.plugin === '@deepseek-ai/dsh-subagent-codex' || entry.id === 'codex') {
+    const base = t('nativeCodexLabel')
+    return {
+      primary: model !== undefined ? `${base} · ${model}` : base,
+      meta: pluginTag ?? 'dsh-subagent-codex',
+      kind: 'native',
+    }
+  }
+  if (entry.plugin === '@deepseek-ai/dsh-subagent-claude-code' || entry.id === 'claude-code') {
+    const base = t('nativeClaudeLabel')
+    return {
+      primary: model !== undefined ? `${base} · ${model}` : base,
+      meta: pluginTag ?? 'dsh-subagent-claude-code',
+      kind: 'native',
+    }
+  }
+  const label = entry.provider?.label ?? entry.id
+  const fallbackMeta = entry.id !== label ? entry.id : undefined
+  return {
+    primary: label,
+    ...(pluginTag !== undefined ? { meta: pluginTag } : fallbackMeta !== undefined ? { meta: fallbackMeta } : {}),
+    kind: 'native',
+  }
+}
+
+function describeOarProvider(provider: ExternalProviderItem): OptionDisplay {
+  return { primary: provider.label, meta: provider.id, kind: 'oar' }
+}
+
+function SelectDropdown(props: {
+  readonly id: string
+  readonly labelledBy: string
+  readonly items: readonly MenuEntry[]
+  readonly selectedId: string
+  readonly valuePrimary: string
+  readonly valueMeta?: string
+  readonly valueKind: RouteOptionKind
+  readonly active?: boolean
+  readonly disabled: boolean
+  readonly onSelect: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  const shown = open && !props.disabled
+  const valueId = `${props.id}-value`
+
+  const anchor = (
+    <button
+      ref={trigger}
+      id={props.id}
+      type="button"
+      className="dsh-orch-select-trigger"
+      data-open={shown ? 'true' : 'false'}
+      data-active={props.active ? 'true' : 'false'}
+      aria-haspopup="menu"
+      aria-expanded={shown}
+      aria-labelledby={`${props.labelledBy} ${valueId}`}
+      disabled={props.disabled}
+      onClick={() => { setOpen(prev => !prev) }}
+    >
+      <span className="dsh-orch-select-leading">
+        <OptionKindGlyph kind={props.valueKind} />
+      </span>
+      <span id={valueId} className="dsh-orch-select-value">
+        <span className="dsh-orch-select-primary">{props.valuePrimary}</span>
+        {props.valueMeta !== undefined ? <span className="dsh-orch-select-meta">{props.valueMeta}</span> : null}
+      </span>
+      <IconChevronDownOutlineRegular className="dsh-orch-select-chevron" aria-hidden={true} />
+    </button>
+  )
+
+  return (
+    <Menu
+      open={shown}
+      onClose={() => { setOpen(false) }}
+      items={props.items}
+      selectedId={props.selectedId}
+      onSelect={(id) => {
+        trigger.current?.focus({ preventScroll: true })
+        setOpen(false)
+        if (id !== props.selectedId) props.onSelect(id)
+      }}
+      portal
+      autoFocus
+      minWidthFromAnchor
+      className="dsh-orch-menu-root"
+      listClassName="dsh-orch-menu-list"
+      anchor={anchor}
+    />
   )
 }
 
@@ -550,18 +876,60 @@ export type OrchestrationSettingsCardProps = PropsRuntime<'plugins.bundle.config
   & InjectFace<OrchestrationCardFace>
 
 export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps) {
+  if (props.view === 'summary') return props.t('roleModelsIntro')
+  return <OrchestrationSettingsPage {...props} />
+}
+
+function OrchestrationSettingsPage(props: OrchestrationSettingsCardProps) {
   const { t } = props
   const state = props.useOrchestrationCard(snapshot => snapshot)
   const baseId = useId()
 
-  if (props.view === 'summary') return t('roleModelsIntro')
-
   const editable = state.writable && !state.saving
-  const oarProviders = state.externalProviders.filter(provider => provider.isOar)
-  const otherExternalProviders = state.externalProviders.filter(provider => !provider.isOar)
+  const { nativePlugins, oarProviders } = useMemo(
+    () => partitionExternalProviders(state.externalProviders),
+    [state.externalProviders],
+  )
+  const installedExternalCount = nativePlugins.filter(entry => entry.installed).length + oarProviders.length
   const catalogEmpty = state.catalogStatus === 'ready'
-    && state.externalProviders.length === 0
+    && installedExternalCount === 0
     && state.llmGroups.length === 0
+
+  const routeDescriptors = useMemo(() => {
+    const labels = new Map<string, OptionDisplay>([
+      ['', { primary: t('inheritDefault'), kind: 'inherit' }],
+    ])
+
+    const nativeEntries = nativePlugins.map((entry) => {
+      const id = encodeSubagentSelection(entry.id)
+      const display = describeNativePlugin(entry, t)
+      if (entry.installed) labels.set(id, display)
+      return { id, display, installed: entry.installed }
+    })
+
+    const oarEntries = oarProviders.map((provider) => {
+      const id = encodeSubagentSelection(provider.id)
+      const display = describeOarProvider(provider)
+      labels.set(id, display)
+      return { id, display }
+    })
+
+    const llmSections = state.llmGroups.map(group => ({
+      group,
+      items: group.models.map((model) => {
+        const id = encodeLlmSelection(group.id, model.id)
+        const display: OptionDisplay = {
+          primary: model.name,
+          meta: model.name === model.id ? group.id : `${group.id}/${model.id}`,
+          kind: 'llm',
+        }
+        labels.set(id, display)
+        return { id, display }
+      }),
+    }))
+
+    return { labels, nativeEntries, oarEntries, llmSections }
+  }, [nativePlugins, oarProviders, state.llmGroups, t])
 
   return (
     <SettingsForm labels={formLabels(t)} state={state} onSave={props.save} onDiscard={props.discard}>
@@ -575,9 +943,9 @@ export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps)
             ? (
               <span className="dsh-orch-status-pill">
                 <span className="dsh-orch-status-dot" aria-hidden="true" />
-                {oarProviders.length > 0
+                {installedExternalCount > 0
                   ? t('statusRuntimesReady', {
-                      oarCount: String(oarProviders.length),
+                      runtimeCount: String(installedExternalCount),
                       providerCount: String(state.llmGroups.length),
                     })
                   : t('statusProvidersOnly', {
@@ -628,17 +996,6 @@ export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps)
           )
           : null}
 
-        {state.catalogStatus === 'ready' && !state.officialOarInstalled
-          ? (
-            <div className="dsh-orch-banner" data-tone="info">
-              <div className="dsh-orch-banner-body">
-                <span className="dsh-orch-banner-title">{t('oarInstallHintTitle')}</span>
-                <span>{t('oarInstallHint')}</span>
-              </div>
-            </div>
-          )
-          : null}
-
         {state.conflicted
           ? (
             <div className="dsh-orch-banner" data-tone="error" role="alert">
@@ -652,10 +1009,141 @@ export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps)
             const roleState = state.roles[role]
             const meta = ROLE_PRESENTATION[role]
             const selectId = `${baseId}-role-${role}`
+            const roleLabelId = `${baseId}-role-label-${role}`
             const effortId = `${baseId}-effort-${role}`
+            const effortLabelId = `${baseId}-effort-label-${role}`
             const showEffort = roleState.efforts.length > 0 || roleState.reasoningEffort !== ''
             const hasKnownEffort = roleState.reasoningEffort === ''
               || roleState.efforts.some(effort => effort.id === roleState.reasoningEffort)
+
+            const isUnlistedRoute = roleState.selection !== ''
+              && (!roleState.available || (state.catalogStatus === 'ready' && !routeDescriptors.labels.has(roleState.selection)))
+            const decodedSelection = decodeRoleSelection(roleState.selection)
+            const fallbackSelectionLabel = roleState.unavailableLabel
+              ?? (decodedSelection.kind === 'subagent'
+                ? decodedSelection.subagentProvider
+                : decodedSelection.kind === 'llm'
+                  ? `${decodedSelection.provider}/${decodedSelection.model}`
+                  : roleState.selection)
+            const unavailableRouteText = isUnlistedRoute
+              ? t('unavailableOption', { value: fallbackSelectionLabel })
+              : undefined
+
+            const routeItems: MenuEntry[] = [
+              {
+                id: '',
+                icon: <OptionKindGlyph kind="inherit" />,
+                label: <OptionRow primary={t('inheritDefault')} selected={roleState.selection === ''} />,
+              },
+            ]
+            if (isUnlistedRoute) {
+              routeItems.push(
+                { type: 'separator', id: `sep-unavail-${role}` },
+                { type: 'label', id: `lbl-unavail-${role}`, text: t('unavailableGroup') },
+                {
+                  id: roleState.selection,
+                  icon: <OptionKindGlyph kind="warn" />,
+                  label: <OptionRow primary={unavailableRouteText!} selected tone="warn" />,
+                },
+              )
+            }
+            if (routeDescriptors.nativeEntries.length > 0) {
+              routeItems.push(
+                { type: 'separator', id: `sep-external-${role}` },
+                { type: 'label', id: `lbl-external-${role}`, text: t('externalGroup') },
+                ...routeDescriptors.nativeEntries.map(({ id, display, installed }) => ({
+                  id,
+                  disabled: !installed,
+                  icon: <OptionKindGlyph kind={display.kind} />,
+                  label: (
+                    <OptionRow
+                      primary={display.primary}
+                      meta={display.meta}
+                      trailingHint={installed ? undefined : t('installPluginHint')}
+                      selected={installed && roleState.selection === id}
+                    />
+                  ),
+                })),
+              )
+            }
+            if (routeDescriptors.oarEntries.length > 0) {
+              routeItems.push(
+                { type: 'separator', id: `sep-oar-${role}` },
+                { type: 'label', id: `lbl-oar-${role}`, text: t('oarGroup') },
+                ...routeDescriptors.oarEntries.map(({ id, display }) => ({
+                  id,
+                  icon: <OptionKindGlyph kind={display.kind} />,
+                  label: (
+                    <OptionRow
+                      primary={display.primary}
+                      meta={display.meta}
+                      selected={roleState.selection === id}
+                    />
+                  ),
+                })),
+              )
+            }
+            for (const { group, items } of routeDescriptors.llmSections) {
+              routeItems.push(
+                { type: 'separator', id: `sep-llm-${role}-${group.id}` },
+                { type: 'label', id: `lbl-llm-${role}-${group.id}`, text: group.name },
+                ...items.map(({ id, display }) => ({
+                  id,
+                  icon: <OptionKindGlyph kind={display.kind} />,
+                  label: (
+                    <OptionRow
+                      primary={display.primary}
+                      meta={display.meta}
+                      selected={roleState.selection === id}
+                    />
+                  ),
+                })),
+              )
+            }
+
+            const selectedRouteDisplay: OptionDisplay = isUnlistedRoute
+              ? { primary: unavailableRouteText!, kind: 'warn' }
+              : (routeDescriptors.labels.get(roleState.selection)
+                ?? (roleState.selection !== ''
+                  ? { primary: fallbackSelectionLabel, kind: decodedSelection.kind === 'llm' ? 'llm' : 'native' }
+                  : { primary: t('inheritDefault'), kind: 'inherit' }))
+
+            const effortItems: MenuEntry[] = showEffort
+              ? [
+                  {
+                    id: '',
+                    icon: <OptionKindGlyph kind="effort" />,
+                    label: <OptionRow primary={t('reasoningDefault')} selected={roleState.reasoningEffort === ''} />,
+                  },
+                  ...(!hasKnownEffort
+                    ? [{
+                        id: roleState.reasoningEffort,
+                        icon: <OptionKindGlyph kind="warn" />,
+                        label: (
+                          <OptionRow
+                            primary={t('unavailableOption', { value: roleState.reasoningEffort })}
+                            selected
+                            tone="warn"
+                          />
+                        ),
+                      }]
+                    : []),
+                  ...roleState.efforts.map(effort => ({
+                    id: effort.id,
+                    icon: <OptionKindGlyph kind="effort" />,
+                    label: (
+                      <OptionRow
+                        primary={effort.name}
+                        selected={roleState.reasoningEffort === effort.id}
+                      />
+                    ),
+                  })),
+                ]
+              : []
+            const selectedEffortLabel = roleState.reasoningEffort === ''
+              ? t('reasoningDefault')
+              : (roleState.efforts.find(effort => effort.id === roleState.reasoningEffort)?.name
+                ?? t('unavailableOption', { value: roleState.reasoningEffort }))
 
             return (
               <div
@@ -669,7 +1157,7 @@ export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps)
                       <RoleGlyph role={role} />
                     </span>
                     <div className="dsh-orch-role-meta">
-                      <label className="dsh-orch-role-label" htmlFor={selectId}>{t(meta.label)}</label>
+                      <label id={roleLabelId} className="dsh-orch-role-label" htmlFor={selectId}>{t(meta.label)}</label>
                       <code className="dsh-orch-role-code">{role}</code>
                       <span className="dsh-orch-cap-chip">{t(meta.capability)}</span>
                     </div>
@@ -706,98 +1194,35 @@ export function OrchestrationSettingsCard(props: OrchestrationSettingsCardProps)
                     {showEffort
                       ? <span className="dsh-orch-field-label">{t('routeFieldLabel')}</span>
                       : null}
-                    <div className="dsh-orch-select-wrap">
-                      <select
-                        id={selectId}
-                        className="dsh-orch-select"
-                        value={roleState.selection}
-                        disabled={!editable}
-                        onChange={(event: { currentTarget: { value: string } }) => {
-                          props.selectRoleRoute(role, event.currentTarget.value)
-                        }}
-                      >
-                        <option value="">{t('inheritDefault')}</option>
-
-                        {!roleState.available && roleState.selection !== ''
-                          ? (
-                            <optgroup label={t('unavailableGroup')}>
-                              <option value={roleState.selection}>
-                                {t('unavailableOption', { value: roleState.unavailableLabel ?? roleState.selection })}
-                              </option>
-                            </optgroup>
-                          )
-                          : null}
-
-                        {oarProviders.length > 0
-                          ? (
-                            <optgroup label={t('oarGroup')}>
-                              {oarProviders.map(provider => (
-                                <option key={provider.id} value={encodeSubagentSelection(provider.id)}>
-                                  {provider.label}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )
-                          : null}
-
-                        {otherExternalProviders.length > 0
-                          ? (
-                            <optgroup label={t('externalGroup')}>
-                              {otherExternalProviders.map(provider => (
-                                <option key={provider.id} value={encodeSubagentSelection(provider.id)}>
-                                  {provider.label}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )
-                          : null}
-
-                        {state.llmGroups.map(group => (
-                          <optgroup key={group.id} label={group.name}>
-                            {group.models.map(model => (
-                              <option
-                                key={`${group.id}/${model.id}`}
-                                value={encodeLlmSelection(group.id, model.id)}
-                              >
-                                {`${model.name} (${group.id}/${model.id})`}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <ChevronIcon />
-                    </div>
+                    <SelectDropdown
+                      id={selectId}
+                      labelledBy={roleLabelId}
+                      items={routeItems}
+                      selectedId={roleState.selection}
+                      valuePrimary={selectedRouteDisplay.primary}
+                      valueMeta={selectedRouteDisplay.meta}
+                      valueKind={selectedRouteDisplay.kind}
+                      active={roleState.selection !== ''}
+                      disabled={!editable}
+                      onSelect={(next) => { props.selectRoleRoute(role, next) }}
+                    />
                   </div>
 
                   {showEffort
                     ? (
                       <div className="dsh-orch-field">
-                        <label className="dsh-orch-field-label" htmlFor={effortId}>{t('reasoningLabel')}</label>
-                        <div className="dsh-orch-select-wrap">
-                          <select
-                            id={effortId}
-                            aria-label={`${t(meta.label)} · ${t('reasoningLabel')}`}
-                            className="dsh-orch-select"
-                            value={roleState.reasoningEffort}
-                            disabled={!editable}
-                            onChange={(event: { currentTarget: { value: string } }) => {
-                              props.selectRoleEffort(role, event.currentTarget.value)
-                            }}
-                          >
-                            <option value="">{t('reasoningDefault')}</option>
-                            {!hasKnownEffort
-                              ? (
-                                <option value={roleState.reasoningEffort}>
-                                  {t('unavailableOption', { value: roleState.reasoningEffort })}
-                                </option>
-                              )
-                              : null}
-                            {roleState.efforts.map(effort => (
-                              <option key={effort.id} value={effort.id}>{effort.name}</option>
-                            ))}
-                          </select>
-                          <ChevronIcon />
-                        </div>
+                        <label id={effortLabelId} className="dsh-orch-field-label" htmlFor={effortId}>{t('reasoningLabel')}</label>
+                        <SelectDropdown
+                          id={effortId}
+                          labelledBy={effortLabelId}
+                          items={effortItems}
+                          selectedId={roleState.reasoningEffort}
+                          valuePrimary={selectedEffortLabel}
+                          valueKind={hasKnownEffort ? 'effort' : 'warn'}
+                          active={roleState.reasoningEffort !== ''}
+                          disabled={!editable}
+                          onSelect={(next) => { props.selectRoleEffort(role, next) }}
+                        />
                       </div>
                     )
                     : null}

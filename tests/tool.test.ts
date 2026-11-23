@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
+import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { resolveOrchestrationConfig } from '../src/config.js'
 import { WorkerWriteCoordinator } from '../src/scope.js'
@@ -321,6 +322,12 @@ describe('caller delivery and roles', () => {
       description: 'nested fork',
       prompt: 'fork again',
     }, exec('bad-fork', agent('fork-parent'), {}))).rejects.toThrow(/Fork is not available/)
+    await expect(tool.execute({
+      role: 'general-purpose',
+      description: 'unsafe scope',
+      prompt: 'edit outside',
+      writeScope: ['../outside'],
+    }, exec('bad-gp-scope', agent('other'), {}))).rejects.toBeInstanceOf(ToolArgsError)
     expect(startActivation).not.toHaveBeenCalled()
   })
 })

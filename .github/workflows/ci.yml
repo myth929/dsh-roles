@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check DeepSeek Harness plugin
+        uses: bowenliang123/dsh-plugin-checker@v1
+
       - uses: pnpm/action-setup@v6
         with:
           version: latest
@@ -38,4 +41,4 @@ jobs:
         run: pnpm run typecheck
 
       - name: Test
-        run: pnpm test
+        run: pnpm exec vitest run

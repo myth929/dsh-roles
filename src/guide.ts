@@ -43,6 +43,7 @@ export interface ExternalSubagentProviderOption {
   readonly label: string
   readonly runtime?: string
   readonly model?: string
+  readonly plugin?: string
   readonly isOar: boolean
 }
 
@@ -239,6 +240,7 @@ function collectLoaderProviderMeta(ctx: Context): ReadonlyMap<string, LoaderProv
       if (providerName === undefined) {
         if (moduleName === '@deepseek-ai/dsh-experimental-subagent-oar') providerName = 'oar'
         else if (moduleName === '@deepseek-ai/dsh-subagent-codex') providerName = 'codex'
+        else if (moduleName === '@deepseek-ai/dsh-subagent-claude-code') providerName = 'claude-code'
       }
       if (providerName === undefined) continue
       const runtime = cfg ? readStringField(cfg, 'runtime') : undefined
@@ -290,17 +292,27 @@ export function listExternalSubagentProviders(
       const isOar = meta?.moduleName === '@deepseek-ai/dsh-experimental-subagent-oar'
         || name === 'oar'
         || name.startsWith('oar-')
-      const runtime = meta?.runtime ?? (name.startsWith('oar-') ? name.slice(4) : name === 'codex' ? 'codex' : undefined)
+      const runtime = meta?.runtime ?? (
+        name.startsWith('oar-')
+          ? name.slice(4)
+          : name === 'codex'
+            ? 'codex'
+            : name === 'claude-code'
+              ? 'claude'
+              : undefined
+      )
       const model = meta?.model
+      const plugin = meta?.moduleName
       const baseLabel = isOar
         ? (runtime !== undefined ? `OAR · ${titleCase(runtime)}` : 'OAR')
-        : (name === 'codex' ? 'Codex' : name)
+        : (name === 'codex' ? 'Codex' : name === 'claude-code' ? 'Claude Code' : name)
       const label = model !== undefined ? `${baseLabel} · ${model}` : baseLabel
       options.push(Object.freeze({
         id: name,
         label,
         ...(runtime === undefined ? {} : { runtime }),
         ...(model === undefined ? {} : { model }),
+        ...(plugin === undefined ? {} : { plugin }),
         isOar,
       }))
     }
@@ -311,25 +323,6 @@ export function listExternalSubagentProviders(
   } catch {
     return []
   }
-}
-
-/**
- * Whether the host has at least one official DSH OAR provider installed
- * (distinct from this bundle's temporary built-in `oar-antigravity` shim).
- */
-export function hasOfficialOarProviders(
-  ctx: Context,
-  externalProviders: readonly ExternalSubagentProviderOption[],
-  builtinAntigravityActive: boolean,
-): boolean {
-  const loaderMetaMap = collectLoaderProviderMeta(ctx)
-  for (const provider of externalProviders) {
-    if (!provider.isOar) continue
-    const meta = loaderMetaMap.get(provider.id)
-    if (meta?.moduleName === '@deepseek-ai/dsh-experimental-subagent-oar') return true
-    if (!builtinAntigravityActive || provider.id !== 'oar-antigravity') return true
-  }
-  return false
 }
 
 function listSubagentProviders(ctx: Context, config: ResolvedConfig): readonly string[] {

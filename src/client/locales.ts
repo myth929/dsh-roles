@@ -16,22 +16,22 @@ export const en = {
 
   roleModelsTitle: 'Preset Roles & Model Routing',
   roleModelsIntro:
-    'All preset roles follow the parent session model by default. Override any role below to balance intelligence, speed, and cost — or delegate it to an OAR runtime.',
-  statusRuntimesReady: '{oarCount} OAR · {providerCount} model providers available',
+    'All preset roles follow the parent session model by default. Override any role below to balance intelligence, speed, and cost — or delegate it to an external subagent runtime.',
+  statusRuntimesReady: '{runtimeCount} external runtimes · {providerCount} model providers available',
   statusProvidersOnly: '{providerCount} model providers available',
   loadingCatalog: 'Loading available models and external runtimes…',
   catalogLoadFailed: 'Could not load the model catalog or external runtimes.',
   retry: 'Retry',
   catalogPartial: 'Some model providers failed to load; saved choices remain shown.',
   catalogEmpty: 'No subagent-capable LLM models or external runtimes are available.',
-  oarInstallHintTitle: 'Want to use Codex or Claude Code via OAR?',
-  oarInstallHint:
-    'Install and configure the official @deepseek-ai/dsh-experimental-subagent-oar plugin in your DSH profile and sign in to the corresponding CLI.',
 
   routeFieldLabel: 'Model / Runtime',
   inheritDefault: 'Default (follow parent model)',
-  oarGroup: 'OAR external runtimes (Antigravity / Codex / Claude)',
-  externalGroup: 'Other subagent runtimes',
+  oarGroup: 'OAR external runtimes',
+  externalGroup: 'DSH native subagent plugins',
+  nativeCodexLabel: 'Codex',
+  nativeClaudeLabel: 'Claude Code',
+  installPluginHint: 'Install plugin first',
   unavailableGroup: 'Saved but currently unavailable',
   unavailableOption: '{value} (unavailable)',
 
@@ -86,22 +86,22 @@ export const zh: Record<OrchestrationLocaleKey, string> = {
 
   roleModelsTitle: '预置角色与模型路由',
   roleModelsIntro:
-    '所有预置角色默认跟随主会话模型。你可以按角色职责单独指定更强或更轻快的模型，或委派给 OAR 外部运行时。',
-  statusRuntimesReady: '已就绪：{oarCount} 个 OAR 运行时 · {providerCount} 个模型提供方',
+    '所有预置角色默认跟随主会话模型。你可以按角色职责单独指定更强或更轻快的模型，或委派给外部子智能体运行时。',
+  statusRuntimesReady: '已就绪：{runtimeCount} 个外部子智能体 · {providerCount} 个模型提供方',
   statusProvidersOnly: '已就绪：{providerCount} 个模型提供方',
-  loadingCatalog: '正在加载可用模型与 OAR 运行时…',
+  loadingCatalog: '正在加载可用模型与外部运行时…',
   catalogLoadFailed: '无法加载模型列表或外部运行环境。',
   retry: '重试',
   catalogPartial: '部分模型提供方加载失败；已保存的配置仍可保留或重置。',
   catalogEmpty: '当前没有可用于子智能体的模型或外部运行时。',
-  oarInstallHintTitle: '如需使用 Codex / Claude 等 OAR 外部运行时',
-  oarInstallHint:
-    '请先在 DSH Profile 中安装并配置官方插件 @deepseek-ai/dsh-experimental-subagent-oar，并完成对应原生 CLI 登录。',
 
   routeFieldLabel: '模型 / 运行时',
   inheritDefault: '默认（跟随主模型）',
-  oarGroup: 'OAR 外部子智能体（Antigravity / Codex / Claude 等）',
-  externalGroup: '其他子智能体后端',
+  oarGroup: 'OAR 外部运行时',
+  externalGroup: 'DSH 原生子智能体插件',
+  nativeCodexLabel: 'Codex',
+  nativeClaudeLabel: 'Claude Code',
+  installPluginHint: '请先安装此插件',
   unavailableGroup: '已保存但当前不可用',
   unavailableOption: '{value}（不可用）',
 

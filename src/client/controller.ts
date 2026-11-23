@@ -39,12 +39,87 @@ export interface ExternalProviderItem {
   readonly label: string
   readonly runtime?: string
   readonly model?: string
+  readonly plugin?: string
   readonly isOar: boolean
+}
+
+export interface NativePluginCatalogEntry {
+  readonly id: string
+  readonly plugin: string
+  readonly installed: boolean
+  readonly provider?: ExternalProviderItem
+}
+
+/** Official DSH native subagent plugins always surfaced in the settings menu. */
+export const OFFICIAL_NATIVE_SUBAGENT_PLUGINS = [
+  { id: 'codex', plugin: '@deepseek-ai/dsh-subagent-codex' },
+  { id: 'claude-code', plugin: '@deepseek-ai/dsh-subagent-claude-code' },
+] as const
+
+const NATIVE_COVERED_OAR_RUNTIMES = new Set(['codex', 'claude'])
+
+/**
+ * Partition live host external providers into:
+ * - `nativePlugins`: always includes official Codex & Claude Code native plugins
+ *   (marked `installed: false` when not yet installed so the UI can show a disabled install hint),
+ *   plus any other non-OAR subagent providers;
+ * - `oarProviders`: OAR runtimes not superseded by official DSH native plugins
+ *   (e.g. `oar-antigravity`, hiding duplicate `oar-codex` / `oar-claude`).
+ */
+export function partitionExternalProviders(
+  externalProviders: readonly ExternalProviderItem[],
+): {
+  readonly nativePlugins: readonly NativePluginCatalogEntry[]
+  readonly oarProviders: readonly ExternalProviderItem[]
+} {
+  const nonOar = externalProviders.filter(provider => !provider.isOar)
+  const matchedIds = new Set<string>()
+  const nativePlugins: NativePluginCatalogEntry[] = []
+
+  for (const official of OFFICIAL_NATIVE_SUBAGENT_PLUGINS) {
+    const match = nonOar.find(
+      provider => provider.id === official.id || provider.plugin === official.plugin,
+    )
+    if (match !== undefined) matchedIds.add(match.id)
+    nativePlugins.push({
+      id: match?.id ?? official.id,
+      plugin: match?.plugin ?? official.plugin,
+      installed: match !== undefined,
+      ...(match === undefined ? {} : { provider: match }),
+    })
+  }
+
+  for (const provider of nonOar) {
+    if (matchedIds.has(provider.id)) continue
+    nativePlugins.push({
+      id: provider.id,
+      plugin: provider.plugin ?? provider.id,
+      installed: true,
+      provider,
+    })
+  }
+
+  const oarProviders = externalProviders.filter((provider) => {
+    if (!provider.isOar) return false
+    const runtime = provider.runtime?.toLowerCase()
+    if (runtime !== undefined && NATIVE_COVERED_OAR_RUNTIMES.has(runtime)) return false
+    if (provider.id === 'oar-codex' || provider.id === 'oar-claude') return false
+    return true
+  })
+
+  return { nativePlugins, oarProviders }
+}
+
+/** Format a plugin package name into a concise source badge for dropdown rows. */
+export function shortPluginName(plugin: string | undefined): string | undefined {
+  if (plugin === undefined) return undefined
+  const trimmed = plugin.trim()
+  if (trimmed === '') return undefined
+  return trimmed.startsWith('@deepseek-ai/') ? trimmed.slice('@deepseek-ai/'.length) : trimmed
 }
 
 export interface HostOptionsView {
   readonly externalProviders: readonly ExternalProviderItem[]
-  readonly officialOarInstalled: boolean
 }
 
 export interface OrchestrationFormValues {
@@ -74,7 +149,6 @@ export interface OrchestrationCardState extends SettingsFormShell {
   readonly catalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   readonly catalogPartial: boolean
   readonly externalProviders: readonly ExternalProviderItem[]
-  readonly officialOarInstalled: boolean
   readonly llmGroups: readonly ModelProviderGroup[]
   readonly roles: Readonly<Record<ConfigurableRole, RoleFieldView>>
 }
@@ -215,7 +289,6 @@ function serializeRoleDraft(draft: RoleDraft): Record<string, string> | undefine
 export class OrchestrationSettingsController {
   private llmGroups: readonly ModelProviderGroup[] = []
   private externalProviders: readonly ExternalProviderItem[] = []
-  private officialOarInstalled = false
   private catalogStatus: OrchestrationCardState['catalogStatus'] = 'idle'
   private catalogPartial = false
 
@@ -288,7 +361,6 @@ export class OrchestrationSettingsController {
     }
     if (optionsOutcome.status === 'fulfilled') {
       this.externalProviders = optionsOutcome.value.externalProviders
-      this.officialOarInstalled = optionsOutcome.value.officialOarInstalled
     }
 
     if (catalogOutcome.status === 'rejected' && optionsOutcome.status === 'rejected') {
@@ -391,6 +463,13 @@ export class OrchestrationSettingsController {
     if (rolesDirty || this.draftRoles.size > 0) {
       if (Object.keys(nextUserModels).length === 0) ops.push({ op: 'unset', path: ['models'] })
       else ops.push({ op: 'set', path: ['models'], value: nextUserModels })
+    }
+
+    const userRecord = isPlainObject(snap.user) ? snap.user : undefined
+    const exploreTouched = this.draftRoles.has('explore') || this.resetRoles.has('explore')
+    if (exploreTouched && userRecord !== undefined) {
+      if (userRecord.exploreProvider !== undefined) ops.push({ op: 'unset', path: ['exploreProvider'] })
+      if (userRecord.exploreModel !== undefined) ops.push({ op: 'unset', path: ['exploreModel'] })
     }
 
     if (ops.length === 0) {
@@ -515,7 +594,6 @@ export class OrchestrationSettingsController {
       catalogStatus: this.catalogStatus,
       catalogPartial: this.catalogPartial,
       externalProviders: this.externalProviders,
-      officialOarInstalled: this.officialOarInstalled,
       llmGroups: this.llmGroups,
       roles: roleViews,
     }

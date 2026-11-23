@@ -88,6 +88,7 @@ const GIT_TIMEOUT_MS = 30_000
 const GIT_MAX_BUFFER_BYTES = 4 * 1024 * 1024
 const MAX_REPORTED_FILES = 20
 const MAX_DIRTY_PREVIEW_FILES = 5
+const NULL_HOOKS_PATH = process.platform === 'win32' ? 'NUL' : '/dev/null'
 
 const SCRUBBED_GIT_ENV_KEYS = new Set([
   'GIT_DIR',
@@ -128,7 +129,7 @@ function runGit(
   return new Promise((resolve, reject) => {
     execFile(
       'git',
-      ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', ...args],
+      ['-c', `core.hooksPath=${NULL_HOOKS_PATH}`, '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', ...args],
       {
         cwd,
         env: scrubbedGitEnv(),

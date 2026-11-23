@@ -4,7 +4,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { resolveOrchestrationConfig } from '../src/config.js'
 import {
   buildDshGuideContext,
-  hasOfficialOarProviders,
   listExternalSubagentProviders,
   resolveDshPackageRoots,
 } from '../src/guide.js'
@@ -78,7 +77,7 @@ describe('dsh-code-guide environment discovery', () => {
     expect(text).toContain('## Installed `@deepseek-ai/*` Packages')
   })
 
-  it('lists oar-antigravity alongside oar-codex/oar-claude and tracks official OAR installation', () => {
+  it('lists oar-antigravity alongside oar-codex/oar-claude', () => {
     const config = resolveOrchestrationConfig({}, {})
     const providers = new Map<string, unknown>([
       ['oar-antigravity', { name: 'oar-antigravity', capabilities: {}, inheritsParentContext: false }],
@@ -91,14 +90,70 @@ describe('dsh-code-guide environment discovery', () => {
     expect(builtinOnly).toEqual([
       { id: 'oar-antigravity', label: 'OAR · Antigravity', runtime: 'antigravity', isOar: true },
     ])
-    expect(hasOfficialOarProviders(ctxWithoutOfficial, builtinOnly, true)).toBe(false)
-    expect(hasOfficialOarProviders(ctxWithoutOfficial, builtinOnly, false)).toBe(true)
 
     const ctxWithOfficial = {
       subagents: { getProvider: (name: string) => providers.get(name) },
     } as unknown as Context
     const combined = listExternalSubagentProviders(ctxWithOfficial, config)
     expect(combined.map(item => item.id)).toEqual(['oar-antigravity', 'oar-codex'])
-    expect(hasOfficialOarProviders(ctxWithOfficial, combined, true)).toBe(true)
+  })
+
+  it('includes source plugin package metadata from loader entries so native plugins are distinguished from OAR', () => {
+    const config = resolveOrchestrationConfig({}, {})
+    const providers = new Map<string, unknown>([
+      ['oar-codex', { name: 'oar-codex', capabilities: {}, inheritsParentContext: false }],
+      ['codex', { name: 'codex', capabilities: {}, inheritsParentContext: false }],
+      ['claude-code', { name: 'claude-code', capabilities: {}, inheritsParentContext: false }],
+    ])
+    const ctx = {
+      get: (key: string) => key === 'loader'
+        ? {
+            entries: () => [
+              {
+                options: {
+                  name: '@deepseek-ai/dsh-experimental-subagent-oar',
+                  config: { runtime: 'codex', providerName: 'oar-codex' },
+                },
+              },
+              {
+                options: {
+                  name: '@deepseek-ai/dsh-subagent-codex',
+                },
+              },
+              {
+                options: {
+                  name: '@deepseek-ai/dsh-subagent-claude-code',
+                },
+              },
+            ],
+          }
+        : undefined,
+      subagents: { getProvider: (name: string) => providers.get(name) },
+    } as unknown as Context
+
+    const discovered = listExternalSubagentProviders(ctx, config)
+    expect(discovered).toEqual([
+      {
+        id: 'oar-codex',
+        label: 'OAR · Codex',
+        runtime: 'codex',
+        plugin: '@deepseek-ai/dsh-experimental-subagent-oar',
+        isOar: true,
+      },
+      {
+        id: 'claude-code',
+        label: 'Claude Code',
+        runtime: 'claude',
+        plugin: '@deepseek-ai/dsh-subagent-claude-code',
+        isOar: false,
+      },
+      {
+        id: 'codex',
+        label: 'Codex',
+        runtime: 'codex',
+        plugin: '@deepseek-ai/dsh-subagent-codex',
+        isOar: false,
+      },
+    ])
   })
 })

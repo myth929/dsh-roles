@@ -73,6 +73,18 @@ describe('write guard', () => {
     expect(patchTargets(patch)).toEqual(['packages/app/a.ts', 'outside/new.ts'])
     expect(writeScopeDenial('apply_patch', { input: patch }, directory, scopes!)).toMatch(/outside\/new\.ts/)
   })
+
+  it('keeps scope prefixes anchored to scopeBaseCwd even when effective cwd changes', () => {
+    mkdirSync(join(directory, 'packages/app'), { recursive: true })
+    mkdirSync(join(directory, 'outside/packages/app'), { recursive: true })
+    const scopes = normalizeWriteScopes(['packages/app'])!
+    const shiftedCwd = join(directory, 'outside')
+    // A relative path in the shifted directory must NOT be treated as inside the original workspace scope.
+    expect(isWriteAllowed(shiftedCwd, 'packages/app/escape.ts', scopes, directory)).toBe(false)
+    expect(writeScopeDenial('write', { file_path: 'packages/app/escape.ts' }, shiftedCwd, scopes, directory)).toMatch(/outside/)
+    // A path that resolves back into the original workspace scope remains allowed.
+    expect(isWriteAllowed(shiftedCwd, '../packages/app/ok.ts', scopes, directory)).toBe(true)
+  })
 })
 
 describe('concurrent worker write coordination', () => {

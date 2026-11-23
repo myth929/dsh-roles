@@ -5,6 +5,8 @@ import {
   decodeRoleSelection,
   encodeLlmSelection,
   encodeSubagentSelection,
+  partitionExternalProviders,
+  shortPluginName,
 } from '../src/client/controller.js'
 import type {
   HostOptionsView,
@@ -105,11 +107,10 @@ const CATALOG: ModelCatalogView = {
 const HOST_OPTIONS: HostOptionsView = {
   externalProviders: [
     { id: 'oar-antigravity', label: 'OAR · Antigravity', runtime: 'antigravity', isOar: true },
-    { id: 'oar-codex', label: 'OAR · Codex · gpt-5.4', runtime: 'codex', model: 'gpt-5.4', isOar: true },
-    { id: 'oar-claude', label: 'OAR · Claude', runtime: 'claude', isOar: true },
-    { id: 'codex', label: 'Codex', runtime: 'codex', isOar: false },
+    { id: 'oar-codex', label: 'OAR · Codex · gpt-5.4', runtime: 'codex', model: 'gpt-5.4', plugin: '@deepseek-ai/dsh-experimental-subagent-oar', isOar: true },
+    { id: 'oar-claude', label: 'OAR · Claude', runtime: 'claude', plugin: '@deepseek-ai/dsh-experimental-subagent-oar', isOar: true },
+    { id: 'codex', label: 'Codex', runtime: 'codex', plugin: '@deepseek-ai/dsh-subagent-codex', isOar: false },
   ],
-  officialOarInstalled: true,
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -124,6 +125,40 @@ describe('OrchestrationSettingsController', () => {
     expect(decodeRoleSelection('')).toEqual({ kind: 'inherit' })
     expect(decodeRoleSelection('subagent:oar-codex')).toEqual({ kind: 'subagent', subagentProvider: 'oar-codex' })
     expect(decodeRoleSelection('llm:openai\0gpt-5.4')).toEqual({ kind: 'llm', provider: 'openai', model: 'gpt-5.4' })
+    expect(shortPluginName('@deepseek-ai/dsh-subagent-codex')).toBe('dsh-subagent-codex')
+    expect(shortPluginName('@acme/custom-subagent')).toBe('@acme/custom-subagent')
+    expect(shortPluginName('   ')).toBeUndefined()
+    expect(shortPluginName(undefined)).toBeUndefined()
+  })
+
+  it('always lists Codex & Claude Code under native plugins with installed status and hides duplicate OAR codex/claude', () => {
+    const partial = partitionExternalProviders([
+      { id: 'oar-antigravity', label: 'OAR · Antigravity', runtime: 'antigravity', isOar: true },
+      { id: 'oar-codex', label: 'OAR · Codex', runtime: 'codex', plugin: '@deepseek-ai/dsh-experimental-subagent-oar', isOar: true },
+      { id: 'oar-claude', label: 'OAR · Claude', runtime: 'claude', plugin: '@deepseek-ai/dsh-experimental-subagent-oar', isOar: true },
+      { id: 'codex', label: 'Codex', runtime: 'codex', plugin: '@deepseek-ai/dsh-subagent-codex', isOar: false },
+    ])
+    expect(partial.nativePlugins).toEqual([
+      {
+        id: 'codex',
+        plugin: '@deepseek-ai/dsh-subagent-codex',
+        installed: true,
+        provider: { id: 'codex', label: 'Codex', runtime: 'codex', plugin: '@deepseek-ai/dsh-subagent-codex', isOar: false },
+      },
+      {
+        id: 'claude-code',
+        plugin: '@deepseek-ai/dsh-subagent-claude-code',
+        installed: false,
+      },
+    ])
+    expect(partial.oarProviders.map(p => p.id)).toEqual(['oar-antigravity'])
+
+    const noneInstalled = partitionExternalProviders([])
+    expect(noneInstalled.nativePlugins).toEqual([
+      { id: 'codex', plugin: '@deepseek-ai/dsh-subagent-codex', installed: false },
+      { id: 'claude-code', plugin: '@deepseek-ai/dsh-subagent-claude-code', installed: false },
+    ])
+    expect(noneInstalled.oarProviders).toEqual([])
   })
 
   it('filters relay-* groups, selects OAR + LLM models with effort, and mutates only volatile fields', async () => {
@@ -138,7 +173,6 @@ describe('OrchestrationSettingsController', () => {
     expect(state.catalogStatus).toBe('ready')
     expect(state.llmGroups.map(g => g.id)).toEqual(['openai', 'deepseek'])
     expect(state.externalProviders.map(p => p.id)).toEqual(['oar-antigravity', 'oar-codex', 'oar-claude', 'codex'])
-    expect(state.officialOarInstalled).toBe(true)
     expect(state.dirty).toBe(false)
 
     controller.selectRoleRoute('general-purpose', encodeSubagentSelection('oar-antigravity'))
@@ -242,6 +276,30 @@ describe('OrchestrationSettingsController', () => {
     controller.retryCatalog()
     await flushMicrotasks()
     expect(controller.card.getSnapshot().catalogStatus).toBe('ready')
+    controller.dispose()
+  })
+
+  it('clears legacy exploreProvider and exploreModel when explore is reset or updated', async () => {
+    const mock = createMockScope({
+      value: { exploreProvider: 'deepseek', exploreModel: 'deepseek-chat' },
+      user: { exploreProvider: 'deepseek', exploreModel: 'deepseek-chat' },
+      revision: 2,
+    })
+    const controller = new OrchestrationSettingsController(mock.scope, {
+      loadCatalog: async () => CATALOG,
+      loadHostOptions: async () => HOST_OPTIONS,
+    })
+    await flushMicrotasks()
+
+    expect(controller.card.getSnapshot().roles.explore.overridden).toBe(true)
+    controller.resetRole('explore')
+    await controller.save()
+    expect(mock.recordedOps[0]?.ops).toEqual([
+      { op: 'unset', path: ['models'] },
+      { op: 'unset', path: ['exploreProvider'] },
+      { op: 'unset', path: ['exploreModel'] },
+    ])
+    expect(controller.card.getSnapshot().roles.explore.overridden).toBe(false)
     controller.dispose()
   })
 })

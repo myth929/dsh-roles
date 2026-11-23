@@ -24,6 +24,7 @@ const outFile = join(root, 'lib', 'client.js')
 const result = await esbuild.build({
   entryPoints: [entry],
   bundle: true,
+  minify: true,
   write: false,
   format: 'cjs',
   platform: 'browser',
@@ -66,11 +67,22 @@ assert.equal(typeof registration.factory, 'function', 'bundle must provide a fac
 const stubRequire = (specifier) => {
   switch (specifier) {
     case 'react':
-      return { useId: () => 'id', useEffect: () => {}, useMemo: fn => fn(), useRef: v => ({ current: v }) }
+      return {
+        useId: () => 'id',
+        useEffect: () => {},
+        useMemo: fn => fn(),
+        useRef: v => ({ current: v }),
+        useState: v => [typeof v === 'function' ? v() : v, () => {}],
+      }
     case 'react/jsx-runtime':
       return { jsx: () => null, jsxs: () => null, Fragment: Symbol('Fragment') }
     case '@deepseek-ai/dsh-client-ui-primitives':
-      return { SettingsForm: () => null, SettingsValueField: () => null, Switch: () => null, Tag: () => null }
+      return {
+        IconChevronDownOutlineRegular: () => null,
+        Menu: () => null,
+        SettingsForm: () => null,
+        Tag: () => null,
+      }
     case '@deepseek-ai/dsh-client-ui-slots':
       return {}
     default:

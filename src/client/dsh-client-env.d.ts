@@ -8,6 +8,7 @@ declare module 'react' {
   export function useId(): string
   export function useMemo<T>(factory: () => T, deps: readonly unknown[]): T
   export function useRef<T>(initialValue: T): { current: T }
+  export function useState<T>(initialValue: T | (() => T)): [T, (next: T | ((prev: T) => T)) => void]
   export type ReactNode = unknown
 }
 
@@ -44,12 +45,6 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     saving: string
   }
 
-  export interface SettingsFieldState {
-    text: string
-    overridden: boolean
-    invalid: boolean
-  }
-
   export interface SettingsFormPathOp {
     op: 'set' | 'unset'
     path: readonly string[]
@@ -79,45 +74,54 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     children?: ReactNode
   }): ReactNode
 
-  export function SettingsValueField(props: {
-    id: string
-    label: string
-    hint?: string
-    text: string
-    overridden: boolean
-    invalid: boolean
-    overriddenLabel: string
-    resetLabel: string
-    invalidLabel: string
-    disabled: boolean
-    numeric?: boolean
-    placeholder?: string
-    onEdit: (text: string) => void
-    onReset: () => void
-  }): ReactNode
-
-  export function Switch(props: {
-    checked: boolean
-    onChange: (next: boolean) => void
-    label: string
-    disabled?: boolean
-    title?: string
-    className?: string
-  }): ReactNode
-
   export function Tag(props: {
     tone?: 'outline' | 'solid' | 'neutral' | 'quiet' | 'success' | 'info' | 'warning' | 'danger'
     className?: string
     children?: ReactNode
   }): ReactNode
 
-  export function Button(props: {
-    variant?: 'primary' | 'ghost' | 'outline' | 'toolbar'
-    size?: 'md' | 'sm'
+  export interface MenuItem {
+    id: string
+    label: ReactNode
     disabled?: boolean
+    icon?: ReactNode
+    danger?: boolean
+  }
+
+  export interface MenuSeparator {
+    type: 'separator'
+    id: string
+  }
+
+  export interface MenuLabel {
+    type: 'label'
+    id: string
+    text: string
+  }
+
+  export type MenuEntry = MenuItem | MenuSeparator | MenuLabel
+
+  export function Menu(props: {
+    open: boolean
+    anchor: ReactNode
+    items?: readonly MenuEntry[]
+    selectedId?: string
+    onSelect?: (id: string) => void
+    onClose: () => void
+    align?: 'start' | 'end'
+    side?: 'bottom' | 'top' | 'right'
+    portal?: boolean
+    dense?: boolean
+    compact?: boolean
+    autoFocus?: boolean
+    minWidthFromAnchor?: boolean
     className?: string
-    onClick?: () => void
-    children?: ReactNode
+    listClassName?: string
+  }): ReactNode
+
+  export function IconChevronDownOutlineRegular(props: {
+    className?: string
+    'aria-hidden'?: boolean
   }): ReactNode
 }
 

@@ -16,11 +16,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export {
   CONFIGURABLE_ROLES,
+  OFFICIAL_NATIVE_SUBAGENT_PLUGINS,
   ORCHESTRATION_NS,
   OrchestrationSettingsController,
   decodeRoleSelection,
   encodeLlmSelection,
   encodeSubagentSelection,
+  partitionExternalProviders,
+  shortPluginName,
 } from './controller.js'
 export type {
   CatalogModelItem,
@@ -29,6 +32,7 @@ export type {
   HostOptionsView,
   ModelCatalogView,
   ModelProviderGroup,
+  NativePluginCatalogEntry,
   OrchestrationCardDeps,
   OrchestrationCardState,
   OrchestrationFormValues,
@@ -62,7 +66,6 @@ export function apply(ctx: BrowserClientContext): void {
         const value = res.value as Partial<HostOptionsView> | undefined
         return {
           externalProviders: Array.isArray(value?.externalProviders) ? value.externalProviders : [],
-          officialOarInstalled: value?.officialOarInstalled === true,
         }
       },
     },

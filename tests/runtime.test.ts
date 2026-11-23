@@ -192,6 +192,19 @@ describe('caller write scope', () => {
     expect(check({ name: 'write', arguments: { file_path: 'packages/app/src/a.ts' } } as ToolExecution)).toBeUndefined()
     expect(check({ name: 'write', arguments: { file_path: 'docs/a.md' } } as ToolExecution)?.reason).toMatch(/outside/)
   })
+
+  it('keeps declared prefixes anchored to baseCwd after working-directory/change', () => {
+    const baseCwd = process.cwd()
+    const shiftedCwd = `${baseCwd}/docs`
+    const { agent, guard } = harness()
+    ;(agent.session as unknown as { snapshotEvents: () => unknown[] }).snapshotEvents = () => [
+      { type: 'working-directory/change', data: { cwd: shiftedCwd } },
+    ]
+    enforceWriteScope(agent, normalizeWriteScopes(['packages/app'])!, baseCwd)
+    const check = guard.mock.calls[0]?.[0] as (exec: ToolExecution) => { reason: string } | undefined
+    expect(check({ name: 'write', arguments: { file_path: 'packages/app/escaped.ts' } } as ToolExecution)?.reason).toMatch(/outside/)
+    expect(check({ name: 'write', arguments: { file_path: '../packages/app/ok.ts' } } as ToolExecution)).toBeUndefined()
+  })
 })
 
 describe('step budget', () => {

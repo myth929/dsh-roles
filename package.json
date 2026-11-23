@@ -1,6 +1,6 @@
 {
   "name": "dsh-roles",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Standalone DeepSeek Harness bundle for role-layered subagent orchestration with per-role context slimming, bounded step budgets, write-scope enforcement, and delegation telemetry.",
   "license": "MIT",
   "author": "myth929",
@@ -71,12 +71,14 @@
     "locale",
     "cordis.patch.yml",
     "README*.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/build-client.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json && node scripts/build-client.mjs",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
-    "prepare": "tsc -p tsconfig.build.json && node scripts/build-client.mjs",
+    "prepare": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\" && tsc -p tsconfig.build.json && node scripts/build-client.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "test": "pnpm run build && vitest run",
     "test:watch": "vitest",

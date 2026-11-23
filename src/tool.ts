@@ -505,7 +505,14 @@ export function createOrchestrationTool(ctx: Context, env: ToolEnvironment): Too
       }
       const readOnly = role === 'general-purpose' && args.readOnly === true
       const isolation: IsolationMode = role === 'general-purpose' ? (args.isolation ?? 'none') : 'none'
-      const writeScopes = role === 'general-purpose' ? normalizeWriteScopes(args.writeScope) : undefined
+      let writeScopes: NormalizedScope[] | undefined
+      if (role === 'general-purpose') {
+        try {
+          writeScopes = normalizeWriteScopes(args.writeScope)
+        } catch (error) {
+          throw new ArgsError([error instanceof Error ? error.message : String(error)])
+        }
+      }
       const includeMcp = role === 'general-purpose' && args.includeMcp === true
       const delivery = args.background === true ? 'parent' as const : 'caller' as const
       const roleRoute = role === 'fork' ? undefined : config.models[role]

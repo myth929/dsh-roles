@@ -13,9 +13,10 @@ import { registerAntigravityOarFallback } from './antigravity.js'
 import {
   Config as PluginConfigSchema,
   resolveOrchestrationConfig,
+  unwrapPluginConfig,
 } from './config.js'
 import type { OrchestrationRole, PluginConfigInput, ResolvedConfig } from './config.js'
-import { hasOfficialOarProviders, listExternalSubagentProviders } from './guide.js'
+import { listExternalSubagentProviders } from './guide.js'
 import { isRelayAgent } from './relay.js'
 import { installDelegationReminders } from './reminder.js'
 import { formatRootSchedulingGuidance } from './roles.js'
@@ -82,12 +83,12 @@ function optionalInject(
   ctx: Context,
   deps: readonly string[],
   callback: (scope: Context) => void,
-): () => void {
+): void {
   const injectFn = ctx.inject as unknown as (
     dependencies: readonly string[],
     fn: (scope: Context) => void,
-  ) => () => void
-  return injectFn.call(ctx, deps, callback)
+  ) => unknown
+  injectFn.call(ctx, deps, callback)
 }
 
 /**
@@ -97,14 +98,42 @@ function optionalInject(
  */
 export function apply(ctx: Context, config: PluginConfigInput = {}): void {
   const initial = resolveOrchestrationConfig(config)
-  const currentConfig = (): ResolvedConfig => resolveOrchestrationConfig(config)
+  let cachedConfig: ResolvedConfig = initial
+  let cachedInputs: readonly unknown[] | undefined
+  const currentConfig = (): ResolvedConfig => {
+    const plain = unwrapPluginConfig(config)
+    const inputs = [
+      plain.exploreProvider,
+      plain.exploreModel,
+      plain.models,
+      plain.budgets,
+      plain.reminders,
+      process.env.DSH_ROLES_EXPLORE_PROVIDER,
+      process.env.DSH_ROLES_EXPLORE_MODEL,
+      process.env.DSH_ROLES_MODELS,
+      process.env.DSH_ROLES_BUDGETS,
+      process.env.DSH_ROLES_REMINDERS,
+    ]
+    if (
+      cachedInputs !== undefined
+      && inputs.every((value, index) => Object.is(value, cachedInputs![index]))
+    ) {
+      return cachedConfig
+    }
+    try {
+      cachedConfig = resolveOrchestrationConfig(plain)
+      cachedInputs = inputs
+    } catch (error) {
+      ctx.logger.warn('ignoring invalid live dsh-roles config update: %s', error instanceof Error ? error.message : String(error))
+    }
+    return cachedConfig
+  }
   const pending = new Map<string, PendingChild>()
   const convergedRestrictions = new Map<string, () => void>()
   const trackedProviders = new Set<string>()
   const coordinator = new WorkerWriteCoordinator()
   let boundScope: Context | undefined
   let worktreeService: WorktreeServiceLike | undefined
-  let builtinAntigravityActive = false
   const managedRoleOf = (agent: Agent | undefined): OrchestrationRole | undefined => {
     if (agent === undefined) return undefined
     return pending.get(agent.id)?.state.role ?? readChildPolicy(agent.session)?.role
@@ -156,26 +185,26 @@ export function apply(ctx: Context, config: PluginConfigInput = {}): void {
   }, 'dsh-roles: lifecycle')
 
   // Optionally bind DSH's official `@deepseek-ai/dsh-experimental-worktree` service when installed.
-  ctx.effect(() => optionalInject(ctx, ['worktrees'], (scope) => {
+  optionalInject(ctx, ['worktrees'], (scope) => {
     const service = (scope as unknown as { worktrees?: WorktreeServiceLike }).worktrees
     if (typeof service?.create !== 'function') return
     worktreeService = service
     scope.effect(() => () => {
       if (worktreeService === service) worktreeService = undefined
     }, 'dsh-roles: worktrees')
-  }), 'dsh-roles: worktrees')
+  })
 
   // Suppress DSH's auto-generated settings form so our custom `plugins.bundle.config` page renders.
-  ctx.effect(() => optionalInject(ctx, ['settings'], (scope) => {
+  optionalInject(ctx, ['settings'], (scope) => {
     const settings = (scope as unknown as {
       settings?: { configure?(presentation: { auto?: boolean }, owner?: unknown): () => void }
     }).settings
     if (typeof settings?.configure !== 'function') return
     scope.effect(() => settings.configure!({ auto: false }, ctx.fiber), 'dsh-roles: settings presentation')
-  }), 'dsh-roles: settings presentation')
+  })
 
-  // Expose live external subagent providers (`oar-*`, `codex`, etc.) and official OAR availability to the browser settings UI.
-  ctx.effect(() => optionalInject(ctx, ['connection'], (scope) => {
+  // Expose live external subagent providers (`oar-*`, `codex`, etc.) to the browser settings UI.
+  optionalInject(ctx, ['connection'], (scope) => {
     const connection = (scope as unknown as {
       connection?: {
         rpc?: {
@@ -198,14 +227,13 @@ export function apply(ctx: Context, config: PluginConfigInput = {}): void {
         ok: true,
         value: {
           externalProviders,
-          officialOarInstalled: hasOfficialOarProviders(hostCtx, externalProviders, builtinAntigravityActive),
         },
       }
     }), 'dsh-roles: rpc')
-  }), 'dsh-roles: rpc')
+  })
 
   // Hide the bundle's internal presets from user-facing mode selectors on any DSH host.
-  ctx.effect(() => optionalInject(ctx, ['agentPresets'], (scope) => {
+  optionalInject(ctx, ['agentPresets'], (scope) => {
     const registry = (scope as unknown as {
       agentPresets?: {
         defaultId?: string
@@ -224,59 +252,53 @@ export function apply(ctx: Context, config: PluginConfigInput = {}): void {
       active = false
       if (registry.list === filteredList) registry.list = originalList
     }, 'dsh-roles: preset visibility')
-  }), 'dsh-roles: preset visibility')
+  })
 
   // `ctx.inject` resolves the host service instances the Agent actually
   // consumes; a plain `ctx.tools` from a bundle-layer row can point at a
   // different service copy in composed profiles.
-  ctx.effect(() => {
-    let dispose: (() => void) | undefined
-    ctx.inject(['tools', 'subagents', 'systemPrompt'], (scope) => {
-      boundScope = scope
-      const antigravityFallback = registerAntigravityOarFallback(scope)
-      builtinAntigravityActive = antigravityFallback.registered
-      const toolDefinition = createOrchestrationTool(scope, {
-        get config() { return currentConfig() },
-        coordinator,
-        registerChild: (childId, child) => { pending.set(childId, child) },
-        releaseChild: (childId) => { pending.delete(childId) },
-        retainWriteReservation: (childId, release) => {
-          const child = pending.get(childId)
-          if (child === undefined) release()
-          else child.releaseWriteReservation = release
-        },
-        settleExternalChild: settleState,
-        managedRoleOf,
-        getWorktreeService: () => worktreeService,
-        isVisible: agent => orchestrationToolVisible(agent, managedRoleOf(agent)),
-      })
-      const unregister = scope.tools.register(toolDefinition, {
-        when: ({ agent }) => orchestrationToolVisible(agent, managedRoleOf(agent)),
-      })
-      const removeReminders = installDelegationReminders(scope, {
-        tool: toolDefinition,
-        isEligibleRoot: agent => managedRoleOf(agent) === undefined && shouldInjectGuidance(agent, undefined),
-        getConfig: currentConfig,
-      })
-      const removeSection = scope.systemPrompt.section({
-        name: GUIDANCE_SECTION_NAME,
-        order: scope.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
-        text: context => shouldInjectGuidance(context.agent, managedRoleOf(context.agent))
-          ? formatRootSchedulingGuidance(currentConfig().models)
-          : '',
-      })
-      for (const agent of agentsService(scope)?.list?.() ?? []) convergeBareDelegation(agent)
-      dispose = () => {
-        removeSection()
-        removeReminders()
-        unregister()
-        antigravityFallback.dispose()
-        builtinAntigravityActive = false
-        if (boundScope === scope) boundScope = undefined
-      }
+  ctx.inject(['tools', 'subagents', 'systemPrompt'], (scope) => {
+    boundScope = scope
+    const antigravityFallback = registerAntigravityOarFallback(scope)
+    const toolDefinition = createOrchestrationTool(scope, {
+      get config() { return currentConfig() },
+      coordinator,
+      registerChild: (childId, child) => { pending.set(childId, child) },
+      releaseChild: (childId) => { pending.delete(childId) },
+      retainWriteReservation: (childId, release) => {
+        const child = pending.get(childId)
+        if (child === undefined) release()
+        else child.releaseWriteReservation = release
+      },
+      settleExternalChild: settleState,
+      managedRoleOf,
+      getWorktreeService: () => worktreeService,
+      isVisible: agent => orchestrationToolVisible(agent, managedRoleOf(agent)),
     })
-    return () => dispose?.()
-  }, 'dsh-roles: host bindings')
+    const unregister = scope.tools.register(toolDefinition, {
+      when: ({ agent }) => orchestrationToolVisible(agent, managedRoleOf(agent)),
+    })
+    const removeReminders = installDelegationReminders(scope, {
+      tool: toolDefinition,
+      isEligibleRoot: agent => managedRoleOf(agent) === undefined && shouldInjectGuidance(agent, undefined),
+      getConfig: currentConfig,
+    })
+    const removeSection = scope.systemPrompt.section({
+      name: GUIDANCE_SECTION_NAME,
+      order: scope.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
+      text: context => shouldInjectGuidance(context.agent, managedRoleOf(context.agent))
+        ? formatRootSchedulingGuidance(currentConfig().models)
+        : '',
+    })
+    for (const agent of agentsService(scope)?.list?.() ?? []) convergeBareDelegation(agent)
+    scope.effect?.(() => () => {
+      removeSection()
+      removeReminders()
+      unregister()
+      antigravityFallback.dispose()
+      if (boundScope === scope) boundScope = undefined
+    }, 'dsh-roles: host bindings')
+  })
 
   ctx.effect(() => ctx.on('subagent/provider-added', (provider) => {
     trackedProviders.add(provider.name)
@@ -335,7 +357,11 @@ export function apply(ctx: Context, config: PluginConfigInput = {}): void {
       isolateRoleTools(agent, restored.role, { includeMcp: restored.includeMcp, readOnly: restored.readOnly })
       if (restored.role === 'fork') convergeBareDelegation(agent)
       if (restored.role === 'general-purpose' && restored.writeScopes !== undefined) {
-        enforceWriteScope(agent, normalizeWriteScopes(restored.writeScopes)!, effectiveSessionCwd(agent.session, process.cwd()))
+        enforceWriteScope(
+          agent,
+          normalizeWriteScopes(restored.writeScopes)!,
+          agent.session.header?.cwd ?? effectiveSessionCwd(agent.session, process.cwd()),
+        )
       }
       installStepBudget(agent, restored.role, restored.thoroughness, resolved)
       return undefined
@@ -346,7 +372,7 @@ export function apply(ctx: Context, config: PluginConfigInput = {}): void {
 
   ctx.effect(() => ctx.on('session/event', (session, event) => {
     if ((event as { readonly type: string }).type === 'agent-preset/selected') {
-      const agent = agentsService(ctx)?.get?.(session.id)
+      const agent = agentsService(boundScope ?? ctx)?.get?.(session.id)
       if (agent !== undefined) convergeBareDelegation(agent)
       return
     }

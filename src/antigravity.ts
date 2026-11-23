@@ -12,6 +12,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { accessSync, constants, realpathSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, posix, win32 } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -43,6 +44,15 @@ export const ANTIGRAVITY_MIN_VERSION = Object.freeze([1, 5, 0] as const)
 export const DEFAULT_ANTIGRAVITY_TIMEOUT_MS = 5 * 60 * 1000
 
 const ACP_PROTOCOL_VERSION = 1
+const PACKAGE_VERSION: string = (() => {
+  try {
+    const pkg = createRequire(import.meta.url)('../package.json') as { readonly version?: unknown }
+    if (typeof pkg.version === 'string' && pkg.version.trim() !== '') return pkg.version
+  } catch {
+    // Fall back when running outside a packaged checkout.
+  }
+  return '0.0.1'
+})()
 const HANDSHAKE_TIMEOUT_MS = 30_000
 const CLOSE_TIMEOUT_MS = 2_000
 const KILL_GRACE_MS = 1_500
@@ -538,7 +548,7 @@ export async function startAntigravityOarRun(
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
       },
-      clientInfo: { name: 'dsh-roles', version: '0.1.0' },
+      clientInfo: { name: 'dsh-roles', version: PACKAGE_VERSION },
     }, HANDSHAKE_TIMEOUT_MS)
     const agentCaps = isRecord(initialized.agentCapabilities) ? initialized.agentCapabilities : undefined
     const sessionCaps = isRecord(agentCaps?.sessionCapabilities) ? agentCaps.sessionCapabilities : undefined
