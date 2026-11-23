@@ -1,8 +1,8 @@
-/** Locale dictionaries for the `dsh-orchestration` plugin configuration page. */
+/** Locale dictionaries for the `dsh-roles` plugin configuration page. */
 
 import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 
-export const NS = 'dshOrchestration'
+export const NS = 'dshRoles'
 
 export const en = {
   overridden: 'Customized',

@@ -97,6 +97,26 @@ describe('role isolation', () => {
     expect(optedIn.restrict).not.toHaveBeenCalled()
   })
 
+  it('disables write/edit/apply_patch and installs READ_ONLY_MODE guard when general-purpose runs with readOnly: true', () => {
+    const roDefault = harness(['read', 'glob', 'grep', 'bash', 'write', 'edit', 'apply_patch', 'mcp__jira'])
+    isolateRoleTools(roDefault.agent, 'general-purpose', { includeMcp: false, readOnly: true })
+    expect(roDefault.restrict).toHaveBeenCalledWith({
+      deny: expect.arrayContaining(['mcp__jira', 'write', 'edit', 'apply_patch']),
+    })
+    expect(roDefault.guard).toHaveBeenCalledTimes(1)
+    const check = roDefault.guard.mock.calls[0]?.[0] as (exec: ToolExecution) => { reason: string; info?: { code?: string } } | undefined
+    expect(check({ name: 'read', arguments: {} } as ToolExecution)).toBeUndefined()
+    expect(check({ name: 'bash', arguments: { command: 'git diff' } } as ToolExecution)).toBeUndefined()
+    expect(check({ name: 'write', arguments: {} } as ToolExecution)?.info?.code).toBe('READ_ONLY_MODE')
+    expect(check({ name: 'edit', arguments: {} } as ToolExecution)?.info?.code).toBe('READ_ONLY_MODE')
+    expect(check({ name: 'apply_patch', arguments: {} } as ToolExecution)?.info?.code).toBe('READ_ONLY_MODE')
+
+    const roWithMcp = harness(['read', 'bash', 'write', 'edit', 'mcp__jira'])
+    isolateRoleTools(roWithMcp.agent, 'general-purpose', { includeMcp: true, readOnly: true })
+    expect(roWithMcp.restrict).toHaveBeenCalledWith({ deny: ['write', 'edit'] })
+    expect(roWithMcp.guard).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps parent tools and permissions for fork while guarding against nested delegation', () => {
     const forkChild = harness(undefined, { delegationDepth: 1 })
     isolateRoleTools(forkChild.agent, 'fork', { includeMcp: false })
@@ -113,7 +133,7 @@ describe('role isolation', () => {
 
   it('reads preset-scoped tools via scopeParentOf when host globals disable them', async () => {
     const root = new Context()
-    const presetScope = createScope(root, { preset: 'dsh-orchestration-explore' })
+    const presetScope = createScope(root, { preset: 'dsh-roles-explore' })
     const agentObj = { id: 'child-scoped' }
     const childScope = createScope(root, agentObj, { parent: presetScope.ctx.get('scope') })
     bindScopeParent(agentObj, { presetKey: true })
@@ -276,9 +296,74 @@ describe('durable child policy lookup', () => {
       includeMcp: false,
     })
 
-    expect(readChildPolicy({ header: { agentPreset: 'dsh-orchestration-explore' } })).toMatchObject({ role: 'explore', includeMcp: false })
-    expect(readChildPolicy({ header: { agentPreset: 'dsh-orchestration-plan' } })).toMatchObject({ role: 'plan', includeMcp: false })
-    expect(readChildPolicy({ header: { agentPreset: 'dsh-orchestration-general-purpose' } })).toMatchObject({ role: 'general-purpose', includeMcp: false })
-    expect(readChildPolicy({ header: { agentPreset: 'dsh-orchestration-guide' } })).toMatchObject({ role: 'dsh-code-guide', includeMcp: false })
+    const coldResumed = {
+      header: {},
+      snapshotEvents: () => [
+        parentRecord,
+        endSeed,
+        childRecord,
+        { type: 'session/end-seed', seq: 3, time: 4, data: {} },
+      ] as unknown as readonly SessionEvent[],
+    }
+    expect(readChildPolicy(coldResumed)).toEqual({
+      version: 1,
+      role: 'fork',
+      thoroughness: 'quick',
+      includeMcp: false,
+    })
+
+    expect(readChildPolicy({ header: { agentPreset: 'dsh-roles-explore' } })).toMatchObject({ role: 'explore', includeMcp: false })
+    expect(readChildPolicy({ header: { agentPreset: 'dsh-roles-plan' } })).toMatchObject({ role: 'plan', includeMcp: false })
+    expect(readChildPolicy({ header: { agentPreset: 'dsh-roles-general-purpose' } })).toMatchObject({ role: 'general-purpose', includeMcp: false })
+    expect(readChildPolicy({ header: { agentPreset: 'dsh-roles-guide' } })).toMatchObject({ role: 'dsh-code-guide', includeMcp: false })
+
+    // Durable readOnly and isolation fields survive cold resume, while malformed values are rejected.
+    const withReadOnly = {
+      header: {},
+      snapshotEvents: () => [{
+        type: CHILD_POLICY_RECORD_TYPE,
+        seq: 1,
+        time: 1,
+        ignorable: true,
+        data: { version: 1, role: 'general-purpose', thoroughness: 'standard', includeMcp: true, readOnly: true },
+      }] as unknown as readonly SessionEvent[],
+    }
+    expect(readChildPolicy(withReadOnly)).toEqual({
+      version: 1,
+      role: 'general-purpose',
+      thoroughness: 'standard',
+      includeMcp: true,
+      readOnly: true,
+    })
+
+    const withWorktree = {
+      header: {},
+      snapshotEvents: () => [{
+        type: CHILD_POLICY_RECORD_TYPE,
+        seq: 1,
+        time: 1,
+        ignorable: true,
+        data: { version: 1, role: 'general-purpose', thoroughness: 'thorough', includeMcp: false, isolation: 'worktree' },
+      }] as unknown as readonly SessionEvent[],
+    }
+    expect(readChildPolicy(withWorktree)).toEqual({
+      version: 1,
+      role: 'general-purpose',
+      thoroughness: 'thorough',
+      includeMcp: false,
+      isolation: 'worktree',
+    })
+
+    const invalidIsolation = {
+      header: {},
+      snapshotEvents: () => [{
+        type: CHILD_POLICY_RECORD_TYPE,
+        seq: 1,
+        time: 1,
+        ignorable: true,
+        data: { version: 1, role: 'general-purpose', thoroughness: 'standard', includeMcp: false, isolation: 'docker' },
+      }] as unknown as readonly SessionEvent[],
+    }
+    expect(readChildPolicy(invalidIsolation)).toBeUndefined()
   })
 })

@@ -1,4 +1,4 @@
-// End-to-end runtime smoke test on a plain DSH composition (dsh-base + dsh-web-app + dsh-orchestration).
+// End-to-end runtime smoke test on a plain DSH composition (dsh-base + dsh-web-app + dsh-roles).
 // Verifies: internal preset hiding across all 4 presets, bare subagent/subagent_fork/subagent_oar
 // convergence, explore & plan read-only isolation without workspace instructions, per-role model
 // routing, dsh-code-guide environment + package doc injection, Claude-aligned fork KV-cache fidelity +
@@ -24,16 +24,16 @@ import { listExternalSubagentProviders } from '../../lib/guide.js'
 for (const key of [
   'DSH_ME_PROVIDER',
   'DSH_ME_MODEL',
-  'DSH_ORCHESTRATION_EXPLORE_PROVIDER',
-  'DSH_ORCHESTRATION_EXPLORE_MODEL',
-  'DSH_ORCHESTRATION_MODELS',
-  'DSH_ORCHESTRATION_BUDGETS',
+  'DSH_ROLES_EXPLORE_PROVIDER',
+  'DSH_ROLES_EXPLORE_MODEL',
+  'DSH_ROLES_MODELS',
+  'DSH_ROLES_BUDGETS',
 ]) {
   delete process.env[key]
 }
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const data = mkdtempSync(join(tmpdir(), 'dsh-orchestration-smoke-'))
+const data = mkdtempSync(join(tmpdir(), 'dsh-roles-smoke-'))
 process.env.DSH_HOME = join(data, 'dsh')
 process.env.DSH_SESSION_ROOT = join(data, 'sessions')
 const hostDir = join(data, 'host')
@@ -50,9 +50,9 @@ writeFileSync(anchor, JSON.stringify({
 symlinkSync(join(packageRoot, 'node_modules'), join(hostDir, 'node_modules'), 'dir')
 
 const directory = join(process.env.DSH_HOME, 'profiles', 'orchestration')
-initProfile(directory, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-orchestration'])
+initProfile(directory, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-roles'])
 mkdirSync(join(directory, 'node_modules'), { recursive: true })
-symlinkSync(packageRoot, join(directory, 'node_modules', 'dsh-orchestration'), 'dir')
+symlinkSync(packageRoot, join(directory, 'node_modules', 'dsh-roles'), 'dir')
 
 const profile = loadProfile('orchestration', 'orchestration', anchor)
 const config = join(directory, 'cordis.yml')
@@ -78,7 +78,7 @@ const patches = [
   { id: 'connection', inject: ['webServer'], config: { trustedHosts: [] } },
   { id: 'agent-default-model', config: { provider: 'fixture-parent', model: 'parent-model' } },
   { id: 'agent-preset-registry', config: { default: 'standard' } },
-  { id: 'dsh-orchestration', config: { models: { plan: 'fixture-plan/plan-model' } } },
+  { id: 'dsh-roles', config: { models: { plan: 'fixture-plan/plan-model' } } },
 ]
 writeFileSync(profile.patchPath, JSON.stringify(patches))
 const resolution = await createRuntimeResolution({ installAnchor: anchor, profile })
@@ -197,6 +197,13 @@ class ParentAdapter extends LlmAdapter {
       exploreRequests.push(options)
       exploreToolNames = (options.tools ?? []).map(tool => tool.name).sort()
       for (const chunk of textResponse('Summary: parser lives in src/parser.ts.\nKey Files: src/parser.ts:10-40')) yield chunk
+      return
+    }
+
+    const lastMessage = options.messages.at(-1)
+    const prevMessage = options.messages.at(-2)
+    if (lastMessage?.role === 'user' && lastMessage.source?.kind === 'subagent-settled' && prevMessage?.role !== 'tool') {
+      for (const chunk of textResponse('acknowledged-settled-child')) yield chunk
       return
     }
 
@@ -330,10 +337,10 @@ try {
 
   // Verify browser client bundle composition and suppressed auto-generated settings form.
   const clientEntries = ctx.clientModules?.graph?.().entries ?? []
-  assert(clientEntries.some(entry => entry.id === 'dsh-orchestration'), 'clientModules graph must include dsh-orchestration')
-  const orchestrationSettings = ctx.settings?.describe?.().find(entry => entry.ns === 'dsh-orchestration')
-  assert(orchestrationSettings !== undefined, 'dsh-settings must expose volatile dsh-orchestration descriptor')
-  assert.equal(orchestrationSettings.autoGenerate, false, 'dsh-orchestration must suppress auto-generated form')
+  assert(clientEntries.some(entry => entry.id === 'dsh-roles'), 'clientModules graph must include dsh-roles')
+  const orchestrationSettings = ctx.settings?.describe?.().find(entry => entry.ns === 'dsh-roles')
+  assert(orchestrationSettings !== undefined, 'dsh-settings must expose volatile dsh-roles descriptor')
+  assert.equal(orchestrationSettings.autoGenerate, false, 'dsh-roles must suppress auto-generated form')
 
   // Register a fixture external OAR provider (`oar-codex`) and confirm discovery.
   let oarCalls = 0
@@ -370,10 +377,10 @@ try {
 
   const roster = await ctx.agentPresets.list()
   for (const id of [
-    'dsh-orchestration-explore',
-    'dsh-orchestration-plan',
-    'dsh-orchestration-general-purpose',
-    'dsh-orchestration-guide',
+    'dsh-roles-explore',
+    'dsh-roles-plan',
+    'dsh-roles-general-purpose',
+    'dsh-roles-guide',
   ]) {
     assert(!roster.some(row => row.id === id), `${id} must stay hidden from the mode selector`)
     const resolved = await ctx.agentPresets.resolve(id)
@@ -405,13 +412,23 @@ try {
   assert(!rootTools.includes('subagent') && !rootTools.includes('subagent_fork') && !rootTools.includes('subagent_oar'), 'root must converge all bare delegation entries')
   const rootSystem = rootRequests[0].messages.find(message => message.role === 'system')
   assert(JSON.stringify(rootSystem).includes('Delegation policy'), 'root must receive the scheduling policy')
+  const rootInitialCatalogs = rootRequests[0].messages.filter(message => message.source?.kind === 'dsh-roles/catalog')
+  assert.equal(rootInitialCatalogs.length, 1, 'root must receive the role catalog once at the user-message tail')
+  assert.equal(rootInitialCatalogs[0].source?.form, 'catalog', 'role catalog must carry native DSH catalog form')
 
   assert.equal(exploreRequests.length, 1, 'exactly one exploration child request')
   assert.deepEqual(exploreToolNames, ['glob', 'grep', 'read'], 'exploration child must see only read-only file tools')
   const exploreSystem = exploreRequests[0].messages.find(message => message.role === 'system')
   assert(!JSON.stringify(exploreSystem).includes('Delegation policy'), 'child must not receive the root scheduling policy')
-  const exploreInjected = exploreRequests[0].messages.filter(message => ['agent-instructions', 'skill-catalog', 'skill-invocation'].includes(message.source?.kind))
-  assert.equal(exploreInjected.length, 0, 'exploration child must not receive workspace instructions or skill catalogs')
+  const exploreInjected = exploreRequests[0].messages.filter(message => [
+    'agent-instructions',
+    'skill-catalog',
+    'skill-invocation',
+    'dsh-roles/catalog',
+    'dsh-roles/refresh',
+    'dsh-roles/nudge',
+  ].includes(message.source?.kind))
+  assert.equal(exploreInjected.length, 0, 'exploration child must not receive workspace instructions, skill catalogs, or orchestration reminders')
   assert(ends.length === 1 && ends[0].stopReason === 'completed', 'subagent/end must settle once as completed')
 
   const events = parent.agent.session.snapshotEvents()
@@ -451,6 +468,8 @@ try {
   }))
   await idle(parent.agent)
   assert.equal(rootRequests.length, 8, 'the fork result must return in its own tool step')
+  const laterCatalogs = rootRequests[rootRequests.length - 1].messages.filter(message => message.source?.kind === 'dsh-roles/catalog')
+  assert.equal(laterCatalogs.length, 1, 'role catalog must not duplicate across later turns while visible on the session surface')
   assert.equal(forkRequests.length, 3, 'fork must execute bash once, fail nested orchestrate_subagent once, then finish')
   assert.deepEqual(forkRequests[0].messages[0], rootRequests[0].messages[0], 'fork must preserve node 0 system prompt byte-for-byte for KV-cache fidelity')
   assert.deepEqual(forkToolNames, [...rootTools].sort(), 'fork must keep the parent tool declaration list for KV-cache fidelity')
@@ -480,7 +499,7 @@ try {
   assert.deepEqual(budgetStepTools, [], 'step 4 convergence step must declare zero tools before model execution')
 
   // 6. Mutate volatile config live to route `explore` to `oar-codex` without restarting.
-  await ctx.settings.mutate('dsh-orchestration', [{
+  await ctx.settings.mutate('dsh-roles', [{
     op: 'set',
     path: ['models'],
     value: {
@@ -490,6 +509,10 @@ try {
   }])
   await runTurn(parent.agent, 'Run live OAR explore check.')
   assert.equal(oarCalls, 1, 'live settings mutation must route explore to oar-codex without restart')
+  const catalogSnapshot = ctx.get('sessionProjections').snapshot(parent.agent.session, ['subagentCatalog'])
+  const externalCatalogEntries = (catalogSnapshot.values.subagentCatalog ?? []).filter(entry => entry.mode === 'external')
+  assert.equal(externalCatalogEntries.length, 1, 'caller-delivered external OAR run must appear in parent subagentCatalog projection for Web UI visibility')
+  assert(externalCatalogEntries[0]?.label?.includes('[exp · oar-codex]'), 'external catalog entry label must identify role and provider')
 
   console.log(JSON.stringify({
     status: 'PASS',
@@ -499,6 +522,7 @@ try {
     settingsDescriptorMounted: true,
     oarProviderDiscovered: true,
     liveSettingsOarRouting: true,
+    externalOarCatalogVisible: true,
     keyFilesReturned: true,
     planRoutedToModel: true,
     guideEnvironmentInjected: true,

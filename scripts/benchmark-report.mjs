@@ -3,7 +3,7 @@
  * Compare a plugin-disabled baseline run with an enabled run.
  *
  * Both sides are DSH session directories (or individual session log files).
- * `--telemetry` additionally reads the `[dsh-orchestration] telemetry` lines
+ * `--telemetry` additionally reads the `[dsh-roles] telemetry` lines
  * from an Agent log to report per-delegation detail.
  *
  * Usage:

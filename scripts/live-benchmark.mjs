@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Reproducible live benchmark for `dsh-orchestration`.
+ * Reproducible live benchmark for `dsh-roles`.
  *
  * Boots an isolated DSH composition per run (OpenAI-compatible endpoint, real
  * tools, isolated DSH_HOME/session root) and records total observed tokens, wall
@@ -124,7 +124,7 @@ const tasks = {
   simple: {
     cwd: () => packageRoot,
     prompt: 'Open package.json in this workspace and report its exact "name" and "build" script value. Do not modify files. Answer in one short paragraph.',
-    quality: text => text.includes('dsh-orchestration') && text.includes('tsc -p tsconfig.build.json'),
+    quality: text => text.includes('dsh-roles') && text.includes('tsc -p tsconfig.build.json'),
     check: () => ({ pass: true, detail: 'text assertion' }),
   },
   explore: {
@@ -181,10 +181,10 @@ async function runOne(mode, taskName, limits) {
   symlinkSync(join(packageRoot, 'node_modules'), join(hostDir, 'node_modules'), 'dir')
 
   const directory = join(home, 'profiles', 'live-benchmark')
-  initProfile(directory, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...(mode === 'enabled' ? ['dsh-orchestration'] : [])])
+  initProfile(directory, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', ...(mode === 'enabled' ? ['dsh-roles'] : [])])
   if (mode === 'enabled') {
     mkdirSync(join(directory, 'node_modules'), { recursive: true })
-    symlinkSync(packageRoot, join(directory, 'node_modules', 'dsh-orchestration'), 'dir')
+    symlinkSync(packageRoot, join(directory, 'node_modules', 'dsh-roles'), 'dir')
   }
   const profile = loadProfile('live-benchmark', 'live-benchmark', anchor)
   writeFileSync(join(directory, 'cordis.yml'), '[]\n')

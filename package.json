@@ -1,22 +1,23 @@
 {
-  "name": "dsh-orchestration",
+  "name": "dsh-roles",
   "version": "0.1.0",
   "description": "Standalone DeepSeek Harness bundle for role-layered subagent orchestration with per-role context slimming, bounded step budgets, write-scope enforcement, and delegation telemetry.",
   "license": "MIT",
   "author": "myth929",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/myth929/dsh-orchestration.git"
+    "url": "git+https://github.com/myth929/dsh-roles.git"
   },
-  "homepage": "https://github.com/myth929/dsh-orchestration",
+  "homepage": "https://github.com/myth929/dsh-roles",
   "bugs": {
-    "url": "https://github.com/myth929/dsh-orchestration/issues"
+    "url": "https://github.com/myth929/dsh-roles/issues"
   },
   "keywords": [
     "deepseek-harness",
     "dsh",
     "cordis",
     "plugin",
+    "roles",
     "subagent",
     "orchestration"
   ],
@@ -69,7 +70,6 @@
     "lib",
     "locale",
     "cordis.patch.yml",
-    "scripts",
     "README*.md",
     "LICENSE"
   ],
@@ -89,11 +89,22 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
     "@deepseek-ai/dsh-agent": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent-instructions": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent-preset": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-llm": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-scope": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-session": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-subagent": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-system-prompt": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-time-context": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-bash": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-fs": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-fs-search": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-jobs": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-pwsh": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-todo": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-web": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1"
   },
   "devDependencies": {

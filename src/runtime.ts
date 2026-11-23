@@ -1,6 +1,6 @@
 /**
  * Per-child isolation, durable policy recovery, role guards, and step-budget wiring.
- * @module dsh-orchestration/runtime
+ * @module dsh-roles/runtime
  */
 
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
@@ -15,11 +15,13 @@ import { DELEGATION_MAX_DEPTH, ORCHESTRATION_ROLES, stepBudget, THOROUGHNESS_LEV
 import type { OrchestrationRole, ResolvedConfig, Thoroughness } from './config.js'
 import { GUIDE_TOOL_NAMES } from './guide.js'
 import { CONVERGENCE_DENIAL, convergenceNotice } from './roles.js'
-import { effectiveSessionCwd, normalizeWriteScopes, writeScopeDenial } from './scope.js'
+import { effectiveSessionCwd, normalizeWriteScopes, WRITE_TOOL_NAMES, writeScopeDenial } from './scope.js'
 import type { NormalizedScope } from './scope.js'
+import { ISOLATION_MODES } from './worktree.js'
+import type { IsolationMode } from './worktree.js'
 
 /** Session plugin-record type storing a managed child's role and write policy. */
-export const CHILD_POLICY_RECORD_TYPE = 'plugin:dsh-orchestration/child' as const
+export const CHILD_POLICY_RECORD_TYPE = 'plugin:dsh-roles/child' as const
 
 /** Durable orchestration policy stored inside the child session's own event suffix. */
 export interface PersistedChildPolicy {
@@ -27,12 +29,14 @@ export interface PersistedChildPolicy {
   readonly role: OrchestrationRole
   readonly thoroughness: Thoroughness
   readonly includeMcp: boolean
+  readonly readOnly?: boolean
+  readonly isolation?: IsolationMode
   readonly writeScopes?: readonly string[]
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
-    'plugin:dsh-orchestration/child': PersistedChildPolicy
+    'plugin:dsh-roles/child': PersistedChildPolicy
   }
 }
 
@@ -40,7 +44,14 @@ declare module '@deepseek-ai/dsh-session/types' {
 export const READ_ONLY_TOOL_NAMES = new Set(['read', 'glob', 'grep'])
 
 /** Context-injected source kinds stripped from instruction-isolated children. */
-const STRIPPED_SOURCE_KINDS = new Set(['agent-instructions', 'skill-catalog', 'skill-invocation'])
+const STRIPPED_SOURCE_KINDS = new Set([
+  'agent-instructions',
+  'skill-catalog',
+  'skill-invocation',
+  'dsh-roles/catalog',
+  'dsh-roles/refresh',
+  'dsh-roles/nudge',
+])
 
 const ORCHESTRATION_TOOL = 'orchestrate_subagent'
 
@@ -51,6 +62,10 @@ function isPersistedChildPolicy(value: unknown): value is PersistedChildPolicy {
   if (typeof record.role !== 'string' || !(ORCHESTRATION_ROLES as readonly string[]).includes(record.role)) return false
   if (typeof record.thoroughness !== 'string' || !(THOROUGHNESS_LEVELS as readonly string[]).includes(record.thoroughness)) return false
   if (typeof record.includeMcp !== 'boolean') return false
+  if (record.readOnly !== undefined && typeof record.readOnly !== 'boolean') return false
+  if (record.isolation !== undefined && (typeof record.isolation !== 'string' || !(ISOLATION_MODES as readonly string[]).includes(record.isolation))) {
+    return false
+  }
   if (record.writeScopes !== undefined) {
     if (!Array.isArray(record.writeScopes) || record.writeScopes.length === 0) return false
     try {
@@ -64,13 +79,13 @@ function isPersistedChildPolicy(value: unknown): value is PersistedChildPolicy {
 
 function presetFallbackPolicy(preset: string | undefined): PersistedChildPolicy | undefined {
   switch (preset) {
-    case 'dsh-orchestration-explore':
+    case 'dsh-roles-explore':
       return { version: 1, role: 'explore', thoroughness: 'standard', includeMcp: false }
-    case 'dsh-orchestration-plan':
+    case 'dsh-roles-plan':
       return { version: 1, role: 'plan', thoroughness: 'standard', includeMcp: false }
-    case 'dsh-orchestration-general-purpose':
+    case 'dsh-roles-general-purpose':
       return { version: 1, role: 'general-purpose', thoroughness: 'standard', includeMcp: false }
-    case 'dsh-orchestration-guide':
+    case 'dsh-roles-guide':
       return { version: 1, role: 'dsh-code-guide', thoroughness: 'standard', includeMcp: false }
     default:
       return undefined
@@ -106,7 +121,8 @@ export function readChildPolicy(
     const events = session.snapshotEvents()
     let endSeedIndex = -1
     for (let index = events.length - 1; index >= 0; index -= 1) {
-      if (events[index]?.type === 'session/end-seed') {
+      const event = events[index]
+      if (event?.type === 'session/end-seed' && (event.data as { readonly inherited?: unknown } | undefined)?.inherited === true) {
         endSeedIndex = index
         break
       }
@@ -142,7 +158,7 @@ function readOnlyGuard(role: OrchestrationRole, allowedTools: ReadonlySet<string
     if (allowedTools.has(exec.name)) return undefined
     return {
       reason: `The ${role} role is read-only: \`${exec.name}\` is not available. Use ${allowedList}, and report the limitation instead of retrying.`,
-      info: { name: 'dsh-orchestration', code: 'READ_ONLY_ROLE' },
+      info: { name: 'dsh-roles', code: 'READ_ONLY_ROLE' },
     }
   }
 }
@@ -160,7 +176,7 @@ export function forkDelegationGuard(agent: Agent): (exec: ToolExecution) => Tool
     if (requestedRole === 'fork') {
       return {
         reason: 'Fork is not available inside a forked subagent. Complete this task directly using your tools.',
-        info: { name: 'dsh-orchestration', code: 'NESTED_FORK_DENIED' },
+        info: { name: 'dsh-roles', code: 'NESTED_FORK_DENIED' },
       }
     }
     let depth = DELEGATION_MAX_DEPTH
@@ -171,7 +187,7 @@ export function forkDelegationGuard(agent: Agent): (exec: ToolExecution) => Tool
     }
     return {
       reason: `Subagent nesting limit reached (depth ${depth} of ${DELEGATION_MAX_DEPTH}). Complete this task directly using your tools instead of spawning another subagent.`,
-      info: { name: 'dsh-orchestration', code: 'MAX_DEPTH_REACHED' },
+      info: { name: 'dsh-roles', code: 'MAX_DEPTH_REACHED' },
     }
   }
 }
@@ -193,21 +209,32 @@ export function stripExplorationInstructions(agent: Agent): void {
   agent.ctx.on('agent/pre-step', async (_payload, next) => filterInjectedInstructions(await next()), { prepend: true })
 }
 
+function readOnlyGeneralPurposeGuard(): (exec: ToolExecution) => ToolGuardDenial | undefined {
+  return (exec) => {
+    if (!WRITE_TOOL_NAMES.has(exec.name)) return undefined
+    return {
+      reason: `This general-purpose subagent is running in readOnly mode: \`${exec.name}\` is disabled. Do not modify repository files; report your findings instead.`,
+      info: { name: 'dsh-roles', code: 'READ_ONLY_MODE' },
+    }
+  }
+}
+
 /**
  * Apply the role's inherited-tool policy:
  * - `explore` / `plan` keep only read/glob/grep and strip workspace instructions;
  * - `dsh-code-guide` keeps read-only doc/web/inspect tools and strips workspace instructions;
- * - `general-purpose` drops external MCP unless opted in;
+ * - `general-purpose` drops external MCP unless opted in, and disables file-editing
+ *   tools (`write`, `edit`, `apply_patch`) when `readOnly` is true;
  * - `fork` keeps the parent tool list and full permissions for KV-cache fidelity,
  *   while blocking nested forks and over-depth subagent calls via guard.
  * @param agent - the freshly created or cold-resumed child.
  * @param role - delegated role.
- * @param options - worker MCP preference.
+ * @param options - worker MCP and read-only preferences.
  */
 export function isolateRoleTools(
   agent: Agent,
   role: OrchestrationRole,
-  options: { includeMcp: boolean },
+  options: { includeMcp: boolean; readOnly?: boolean },
 ): void {
   switch (role) {
     case 'explore':
@@ -228,9 +255,20 @@ export function isolateRoleTools(
       return
     }
     case 'general-purpose': {
-      if (options.includeMcp) return
-      const deny = inheritedToolNames(agent).filter(name => name.startsWith('mcp__'))
-      restrictInheritedTools(agent, undefined, deny)
+      const inherited = inheritedToolNames(agent)
+      const denySet = new Set<string>()
+      if (!options.includeMcp) {
+        for (const name of inherited) {
+          if (name.startsWith('mcp__')) denySet.add(name)
+        }
+      }
+      if (options.readOnly === true) {
+        for (const name of inherited) {
+          if (WRITE_TOOL_NAMES.has(name)) denySet.add(name)
+        }
+        agent.ctx.tools.guard(readOnlyGeneralPurposeGuard())
+      }
+      if (denySet.size > 0) restrictInheritedTools(agent, undefined, [...denySet])
       return
     }
     case 'fork':
@@ -252,7 +290,7 @@ export function enforceWriteScope(agent: Agent, scopes: readonly NormalizedScope
     const denial = writeScopeDenial(exec.name, exec.arguments, current, scopes)
     return denial === undefined ? undefined : {
       reason: denial,
-      info: { name: 'dsh-orchestration', code: 'WRITE_SCOPE_VIOLATION' },
+      info: { name: 'dsh-roles', code: 'WRITE_SCOPE_VIOLATION' },
     }
   })
 }
@@ -285,7 +323,7 @@ export function installStepBudget(
     liftRestrict = agent.ctx.tools.restrict({ allow: [] })
     liftGuard = agent.ctx.tools.guard(() => ({
       reason: CONVERGENCE_DENIAL,
-      info: { name: 'dsh-orchestration', code: 'BUDGET_EXHAUSTED' },
+      info: { name: 'dsh-roles', code: 'BUDGET_EXHAUSTED' },
     }))
   }
 

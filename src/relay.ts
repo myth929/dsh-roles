@@ -3,7 +3,7 @@
  * and later switched before the first turn. The durable creation header keeps
  * the initial preset, so the live composition, the folded session projection,
  * and `agent-preset/selected` events take precedence over `header.agentPreset`.
- * @module dsh-orchestration/relay
+ * @module dsh-roles/relay
  */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'

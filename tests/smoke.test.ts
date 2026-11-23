@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-describe('dsh-orchestration runtime smoke', () => {
+describe('dsh-roles runtime smoke', () => {
   it('mounts onto a plain DSH composition with 5 roles, per-role routing, guide env injection, fork parity, guards, and budgets', () => {
     const root = fileURLToPath(new URL('../', import.meta.url))
     const stdout = execFileSync(process.execPath, ['tests/fixtures/smoke-runner.mjs'], {
@@ -19,6 +19,7 @@ describe('dsh-orchestration runtime smoke', () => {
       settingsDescriptorMounted: true,
       oarProviderDiscovered: true,
       liveSettingsOarRouting: true,
+      externalOarCatalogVisible: true,
       keyFilesReturned: true,
       planRoutedToModel: true,
       guideEnvironmentInjected: true,

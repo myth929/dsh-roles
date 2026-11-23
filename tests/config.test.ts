@@ -2,17 +2,20 @@ import { describe, expect, it } from 'vitest'
 import {
   Config,
   DEFAULT_BUDGETS,
+  DEFAULT_REMINDERS,
   MIN_BUDGET,
   ORCHESTRATION_ROLES,
   parseBudgetOverrides,
   parseModelOverrides,
+  parseReminderOverrides,
   resolveBudgets,
   resolveOrchestrationConfig,
+  resolveReminders,
   stepBudget,
   unwrapPluginConfig,
 } from '../src/config.js'
 
-describe('dsh-orchestration defaults', () => {
+describe('dsh-roles defaults', () => {
   it('is usable with no configuration at all across all 5 Claude-aligned roles', () => {
     const config = resolveOrchestrationConfig({}, {})
     expect(config.exploreRoute).toBeUndefined()
@@ -23,6 +26,12 @@ describe('dsh-orchestration defaults', () => {
       'dsh-code-guide': undefined,
     })
     expect(config.budgets).toEqual(DEFAULT_BUDGETS)
+    expect(config.reminders).toEqual(DEFAULT_REMINDERS)
+    expect(DEFAULT_REMINDERS).toEqual({
+      nudgeInspectionSteps: 3,
+      maxNudges: 3,
+      catalogRefreshTurns: 3,
+    })
     expect(ORCHESTRATION_ROLES).toEqual(['general-purpose', 'explore', 'plan', 'fork', 'dsh-code-guide'])
     expect(stepBudget(config.budgets, 'explore', 'quick')).toBe(4)
     expect(stepBudget(config.budgets, 'general-purpose', 'thorough')).toBe(28)
@@ -44,14 +53,14 @@ describe('dsh-orchestration defaults', () => {
 
     expect(resolveOrchestrationConfig({}, {
       ...env,
-      DSH_ORCHESTRATION_EXPLORE_PROVIDER: 'other-provider',
-      DSH_ORCHESTRATION_EXPLORE_MODEL: 'other-model',
+      DSH_ROLES_EXPLORE_PROVIDER: 'other-provider',
+      DSH_ROLES_EXPLORE_MODEL: 'other-model',
     }).exploreRoute).toEqual({ provider: 'other-provider', model: 'other-model' })
   })
 
   it('rejects a half-configured legacy explore route instead of silently inheriting', () => {
-    expect(() => resolveOrchestrationConfig({}, { DSH_ORCHESTRATION_EXPLORE_PROVIDER: 'only-provider' })).toThrow(/requires both/)
-    expect(() => resolveOrchestrationConfig({}, { DSH_ORCHESTRATION_EXPLORE_MODEL: 'only-model' })).toThrow(/requires both/)
+    expect(() => resolveOrchestrationConfig({}, { DSH_ROLES_EXPLORE_PROVIDER: 'only-provider' })).toThrow(/requires both/)
+    expect(() => resolveOrchestrationConfig({}, { DSH_ROLES_EXPLORE_MODEL: 'only-model' })).toThrow(/requires both/)
   })
 
   it('parses per-role models shorthand, objects with slashes, and subagentProvider with config precedence', () => {
@@ -77,7 +86,7 @@ describe('dsh-orchestration defaults', () => {
 
     const merged = resolveOrchestrationConfig(
       { models: { explore: 'loader-provider/loader-model' } },
-      { DSH_ORCHESTRATION_MODELS: '{"explore":"env-p/env-m","plan":"anthropic/claude-opus"}' },
+      { DSH_ROLES_MODELS: '{"explore":"env-p/env-m","plan":"anthropic/claude-opus"}' },
     )
     expect(merged.models.explore).toEqual({ provider: 'loader-provider', model: 'loader-model' })
     expect(merged.models.plan).toEqual({ provider: 'anthropic', model: 'claude-opus' })
@@ -142,19 +151,47 @@ describe('dsh-orchestration defaults', () => {
       exploreModel: undefined,
       models: undefined,
       budgets: undefined,
+      reminders: undefined,
     })
   })
 
-  it('exposes volatile schema fields on Config and validates OAR/LLM models overrides', () => {
+  it('parses and resolves reminder overrides from Loader rows and DSH_ROLES_REMINDERS', () => {
+    expect(resolveReminders(parseReminderOverrides('{"nudgeInspectionSteps":4,"catalogRefreshTurns":0}'))).toEqual({
+      nudgeInspectionSteps: 4,
+      maxNudges: 3,
+      catalogRefreshTurns: 0,
+    })
+    const fromEnv = resolveOrchestrationConfig({}, { DSH_ROLES_REMINDERS: '{"nudgeInspectionSteps":5,"maxNudges":0}' })
+    expect(fromEnv.reminders).toEqual({ nudgeInspectionSteps: 5, maxNudges: 0, catalogRefreshTurns: 3 })
+
+    const rowWins = resolveOrchestrationConfig(
+      { reminders: { nudgeInspectionSteps: 2 } },
+      { DSH_ROLES_REMINDERS: '{"nudgeInspectionSteps":5,"maxNudges":1}' },
+    )
+    expect(rowWins.reminders).toEqual({ nudgeInspectionSteps: 2, maxNudges: 3, catalogRefreshTurns: 3 })
+
+    expect(() => parseReminderOverrides('{"unknown":1}')).toThrow(/unknown key/)
+    expect(() => parseReminderOverrides({ nudgeInspectionSteps: 0 })).toThrow(/between 1 and/)
+    expect(() => parseReminderOverrides({ maxNudges: -1 })).toThrow(/between 0 and/)
+    expect(() => parseReminderOverrides('bad-json')).toThrow(/valid JSON/)
+  })
+
+  it('exposes volatile schema fields on Config and validates OAR/LLM models and reminder overrides', () => {
     const dict = Config.dict as Record<string, { meta?: { volatile?: boolean } }>
     expect(dict.models?.meta?.volatile).toBe(true)
     expect(dict.budgets?.meta?.volatile).toBe(true)
+    expect(dict.reminders?.meta?.volatile).toBe(true)
     expect(dict.exploreProvider?.meta?.volatile).not.toBe(true)
 
     const resolved = Config({
       models: {
         'general-purpose': { subagentProvider: 'oar-codex' },
         plan: { provider: 'openai', model: 'gpt-5.4', reasoningEffort: 'high' },
+      },
+      reminders: {
+        nudgeInspectionSteps: 4,
+        maxNudges: 2,
+        catalogRefreshTurns: 5,
       },
     })
     expect(resolved).toBeDefined()

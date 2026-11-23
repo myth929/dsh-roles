@@ -6,7 +6,7 @@
  * Designed to yield automatically once `@deepseek-ai/dsh-experimental-subagent-oar`
  * upgrades its bundled `@botiverse/oar` and the user configures an official
  * `oar-antigravity` provider row.
- * @module dsh-orchestration/antigravity
+ * @module dsh-roles/antigravity
  */
 
 import { execFile, spawn } from 'node:child_process'
@@ -39,6 +39,9 @@ export const ANTIGRAVITY_OAR_PROVIDER_NAME = 'oar-antigravity'
 /** Minimum `agy` CLI version with native `agy acp` support. */
 export const ANTIGRAVITY_MIN_VERSION = Object.freeze([1, 5, 0] as const)
 
+/** Default per-turn timeout (5 minutes) guarding against runaway external ACP runs. */
+export const DEFAULT_ANTIGRAVITY_TIMEOUT_MS = 5 * 60 * 1000
+
 const ACP_PROTOCOL_VERSION = 1
 const HANDSHAKE_TIMEOUT_MS = 30_000
 const CLOSE_TIMEOUT_MS = 2_000
@@ -58,8 +61,8 @@ export interface AntigravityOarOptions {
   readonly launchArgs?: readonly string[]
   /** Explicit environment entries merged after scrubbing `DSH_*` and credential-shaped variables. */
   readonly env?: Readonly<Record<string, string | null>>
-  /** Optional turn deadline in milliseconds after startup; omission relies on parent cancellation. */
-  readonly timeoutMs?: number
+  /** Optional turn deadline in milliseconds after startup; omitted defaults to {@link DEFAULT_ANTIGRAVITY_TIMEOUT_MS}, `null` disables the timeout. */
+  readonly timeoutMs?: number | null
   /** Safe diagnostic sink invoked on failure; must not throw. */
   readonly onError?: (error: Error, stopReason: SubagentStopReason) => void
   /** Test seam: override version probing. */
@@ -490,9 +493,10 @@ export async function startAntigravityOarRun(
   if (request.signal.aborted) throw new AntigravityOarFailure('startup', 'cancelled')
   const cwd = assertUsableCwd('oar-antigravity', 'child cwd', request.cwd)
 
-  if (options.timeoutMs !== undefined) {
-    assertPositiveFinite('oar-antigravity', 'timeoutMs', options.timeoutMs)
-    if (options.timeoutMs > MAX_TIMER_DELAY_MS) {
+  const effectiveTimeoutMs = options.timeoutMs === undefined ? DEFAULT_ANTIGRAVITY_TIMEOUT_MS : options.timeoutMs
+  if (effectiveTimeoutMs !== null) {
+    assertPositiveFinite('oar-antigravity', 'timeoutMs', effectiveTimeoutMs)
+    if (effectiveTimeoutMs > MAX_TIMER_DELAY_MS) {
       throw new Error(`oar-antigravity: timeoutMs must be no greater than ${MAX_TIMER_DELAY_MS}`)
     }
   }
@@ -534,7 +538,7 @@ export async function startAntigravityOarRun(
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
       },
-      clientInfo: { name: 'dsh-orchestration', version: '0.1.0' },
+      clientInfo: { name: 'dsh-roles', version: '0.1.0' },
     }, HANDSHAKE_TIMEOUT_MS)
     const agentCaps = isRecord(initialized.agentCapabilities) ? initialized.agentCapabilities : undefined
     const sessionCaps = isRecord(agentCaps?.sessionCapabilities) ? agentCaps.sessionCapabilities : undefined
@@ -627,9 +631,9 @@ export async function startAntigravityOarRun(
   request.signal.addEventListener('abort', onAbort, { once: true })
   if (request.signal.aborted) onAbort()
 
-  const timer = options.timeoutMs === undefined
+  const timer = effectiveTimeoutMs === null
     ? undefined
-    : setTimeout(() => { interrupt('timeout') }, options.timeoutMs)
+    : setTimeout(() => { interrupt('timeout') }, effectiveTimeoutMs)
   timer?.unref()
 
   const runTurn = async (): Promise<SubagentResult> => {

@@ -1,4 +1,4 @@
-# dsh-orchestration bundle patch.
+# dsh-roles bundle patch.
 #
 # 1. Registers the Host plane plugin (single `orchestrate_subagent` tool, root
 #    scheduling policy, delegation telemetry, per-child guards).
@@ -11,16 +11,16 @@
 # context. `general-purpose` keeps `agent-instructions` so project rules still
 # apply to implementation children.
 - insert:
-    - id: dsh-orchestration
-      name: dsh-orchestration
+    - id: dsh-roles
+      name: dsh-roles
       config: {}
 
-    - id: preset-dsh-orchestration-explore
+    - id: preset-dsh-roles-explore
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: dsh-orchestration-explore
+        id: dsh-roles-explore
         name: Orchestration Explore
-        description: Internal read-only exploration preset used by dsh-orchestration.
+        description: Internal read-only exploration preset used by dsh-roles.
         order: 900
         plugins:
           - id: tool-fs
@@ -48,12 +48,12 @@
                   headChars: 2048
                   tailChars: 512
 
-    - id: preset-dsh-orchestration-plan
+    - id: preset-dsh-roles-plan
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: dsh-orchestration-plan
+        id: dsh-roles-plan
         name: Orchestration Plan
-        description: Internal read-only planning preset used by dsh-orchestration.
+        description: Internal read-only planning preset used by dsh-roles.
         order: 901
         plugins:
           - id: tool-fs
@@ -81,12 +81,12 @@
                   headChars: 8192
                   tailChars: 2048
 
-    - id: preset-dsh-orchestration-general-purpose
+    - id: preset-dsh-roles-general-purpose
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: dsh-orchestration-general-purpose
+        id: dsh-roles-general-purpose
         name: Orchestration General Purpose
-        description: Internal general-purpose execution preset used by dsh-orchestration.
+        description: Internal general-purpose execution preset used by dsh-roles.
         order: 902
         plugins:
           - id: agent-instructions
@@ -119,12 +119,12 @@
             config:
               allowParallelInProgress: true
 
-    - id: preset-dsh-orchestration-guide
+    - id: preset-dsh-roles-guide
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: dsh-orchestration-guide
+        id: dsh-roles-guide
         name: Orchestration DSH Code Guide
-        description: Internal read-only DSH and Cordis guidance preset used by dsh-orchestration.
+        description: Internal read-only DSH and Cordis guidance preset used by dsh-roles.
         order: 903
         plugins:
           - id: tool-fs

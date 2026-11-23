@@ -1,9 +1,9 @@
 /**
- * Configuration contract for the standalone `dsh-orchestration` bundle.
+ * Configuration contract for the standalone `dsh-roles` bundle.
  *
  * All settings provide usable defaults with explicit Loader-row config taking
  * precedence over process environment variables.
- * @module dsh-orchestration/config
+ * @module dsh-roles/config
  */
 
 import z from '@deepseek-ai/schemastery'
@@ -53,6 +53,30 @@ export const MAX_BUDGET = 200
 /** Claude-aligned single-level delegation depth: root -> child. */
 export const DELEGATION_MAX_DEPTH = 1
 
+/** Tunable reminder thresholds controlling catalog refresh and mid-turn drift nudges. */
+export interface ReminderConfig {
+  /** Consecutive direct inspection steps in one turn before each mid-turn nudge fires. */
+  readonly nudgeInspectionSteps: number
+  /** Maximum mid-turn nudges per turn (0 disables mid-turn nudges). */
+  readonly maxNudges: number
+  /** User-turn interval between compact tail refreshes while the catalog remains visible (0 disables periodic refresh). */
+  readonly catalogRefreshTurns: number
+}
+
+export type ReminderOverrides = Partial<ReminderConfig>
+
+/** Default reminder thresholds tuned for proactive-yet-bounded delegation. */
+export const DEFAULT_REMINDERS: ReminderConfig = Object.freeze({
+  nudgeInspectionSteps: 3,
+  maxNudges: 3,
+  catalogRefreshTurns: 3,
+})
+
+export const MIN_NUDGE_INSPECTION_STEPS = 1
+export const MAX_NUDGE_INSPECTION_STEPS = 50
+export const MAX_DELEGATION_NUDGES_LIMIT = 20
+export const MAX_CATALOG_REFRESH_TURNS = 50
+
 /** Row configuration accepted by the bundle's Loader entry. */
 export interface PluginConfig {
   /** Legacy provider override for `explore`; prefer `models.explore`. */
@@ -63,6 +87,8 @@ export interface PluginConfig {
   models?: string | ModelOverrides
   /** JSON or object overriding one or more role/thoroughness budgets. */
   budgets?: string | BudgetOverrides
+  /** JSON or object overriding reminder thresholds (`nudgeInspectionSteps`, `maxNudges`, `catalogRefreshTurns`). */
+  reminders?: string | ReminderOverrides
 }
 
 /** Loader row input after Cordis resolves `.volatile()` fields into live accessors. */
@@ -75,6 +101,8 @@ export interface PluginConfigInput {
   models?: MaybeVolatile<string | ModelOverrides | undefined>
   /** JSON or object overriding one or more role/thoroughness budgets. */
   budgets?: MaybeVolatile<string | BudgetOverrides | undefined>
+  /** JSON or object overriding reminder thresholds. */
+  reminders?: MaybeVolatile<string | ReminderOverrides | undefined>
 }
 
 /** Validated configuration consumed by the plugin runtime. */
@@ -82,6 +110,7 @@ export interface ResolvedConfig {
   readonly exploreRoute: Readonly<{ provider: string; model: string }> | undefined
   readonly models: ResolvedModels
   readonly budgets: Budgets
+  readonly reminders: ReminderConfig
 }
 
 export const RoleModelRouteSchema: z<RoleModelRoute> = z.object({
@@ -114,11 +143,18 @@ export const BudgetsOverrideSchema = z.object({
   'dsh-code-guide': RoleBudgetOverrideSchema,
 })
 
+export const ReminderOverrideSchema: z<ReminderOverrides> = z.object({
+  nudgeInspectionSteps: z.number().step(1).min(MIN_NUDGE_INSPECTION_STEPS).max(MAX_NUDGE_INSPECTION_STEPS),
+  maxNudges: z.number().step(1).min(0).max(MAX_DELEGATION_NUDGES_LIMIT),
+  catalogRefreshTurns: z.number().step(1).min(0).max(MAX_CATALOG_REFRESH_TURNS),
+}) as z<ReminderOverrides>
+
 export const Config: z<PluginConfigInput> = z.object({
   exploreProvider: z.string().min(1),
   exploreModel: z.string().min(1),
   models: z.union([z.string(), ModelsOverrideSchema]).volatile(),
   budgets: z.union([z.string(), BudgetsOverrideSchema]).volatile(),
+  reminders: z.union([z.string(), ReminderOverrideSchema]).volatile(),
 }) as z<PluginConfigInput>
 
 function readVolatile<T>(value: MaybeVolatile<T> | undefined): T | undefined {
@@ -139,6 +175,7 @@ export function unwrapPluginConfig(raw: PluginConfigInput = {}): PluginConfig {
     exploreModel: readVolatile(raw.exploreModel),
     models: readVolatile(raw.models),
     budgets: readVolatile(raw.budgets),
+    reminders: readVolatile(raw.reminders),
   }
 }
 
@@ -149,7 +186,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function budgetValue(role: string, level: string, value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < MIN_BUDGET || value > MAX_BUDGET) {
     throw new Error(
-      `DSH_ORCHESTRATION_BUDGETS: ${role}.${level} must be an integer between ${MIN_BUDGET} and ${MAX_BUDGET}`,
+      `DSH_ROLES_BUDGETS: ${role}.${level} must be an integer between ${MIN_BUDGET} and ${MAX_BUDGET}`,
     )
   }
   return value
@@ -169,20 +206,20 @@ export function parseBudgetOverrides(raw: unknown): BudgetOverrides {
     try {
       value = JSON.parse(raw)
     } catch {
-      throw new Error('DSH_ORCHESTRATION_BUDGETS must be valid JSON')
+      throw new Error('DSH_ROLES_BUDGETS must be valid JSON')
     }
   }
-  if (!isRecord(value)) throw new Error('DSH_ORCHESTRATION_BUDGETS must be a JSON object')
+  if (!isRecord(value)) throw new Error('DSH_ROLES_BUDGETS must be a JSON object')
   const overrides: Record<string, Partial<Record<string, number>>> = {}
   for (const [role, levels] of Object.entries(value)) {
     if (!(ORCHESTRATION_ROLES as readonly string[]).includes(role)) {
-      throw new Error(`DSH_ORCHESTRATION_BUDGETS: unknown role "${role}"; expected ${ORCHESTRATION_ROLES.join(', ')}`)
+      throw new Error(`DSH_ROLES_BUDGETS: unknown role "${role}"; expected ${ORCHESTRATION_ROLES.join(', ')}`)
     }
-    if (!isRecord(levels)) throw new Error(`DSH_ORCHESTRATION_BUDGETS: ${role} must be an object`)
+    if (!isRecord(levels)) throw new Error(`DSH_ROLES_BUDGETS: ${role} must be an object`)
     const checked: Partial<Record<string, number>> = {}
     for (const [level, budget] of Object.entries(levels)) {
       if (!(THOROUGHNESS_LEVELS as readonly string[]).includes(level)) {
-        throw new Error(`DSH_ORCHESTRATION_BUDGETS: unknown thoroughness "${level}" for role "${role}"`)
+        throw new Error(`DSH_ROLES_BUDGETS: unknown thoroughness "${level}" for role "${role}"`)
       }
       checked[level] = budgetValue(role, level, budget)
     }
@@ -215,7 +252,7 @@ const ALLOWED_MODEL_ROUTE_KEYS = new Set(['provider', 'model', 'reasoningEffort'
 function nonEmptyField(role: string, field: string, value: unknown): string | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`DSH_ORCHESTRATION_MODELS: ${role}.${field} must be a non-empty string`)
+    throw new Error(`DSH_ROLES_MODELS: ${role}.${field} must be a non-empty string`)
   }
   return value.trim()
 }
@@ -225,21 +262,21 @@ function parseRoleModelEntry(role: string, rawSpec: unknown): RoleModelRoute {
     const trimmed = rawSpec.trim()
     const slash = trimmed.indexOf('/')
     if (slash <= 0 || slash === trimmed.length - 1) {
-      throw new Error(`DSH_ORCHESTRATION_MODELS: ${role} string route must be "provider/model"`)
+      throw new Error(`DSH_ROLES_MODELS: ${role} string route must be "provider/model"`)
     }
     const provider = trimmed.slice(0, slash).trim()
     const model = trimmed.slice(slash + 1).trim()
     if (provider === '' || model === '') {
-      throw new Error(`DSH_ORCHESTRATION_MODELS: ${role} string route must be "provider/model"`)
+      throw new Error(`DSH_ROLES_MODELS: ${role} string route must be "provider/model"`)
     }
     return Object.freeze({ provider, model })
   }
   if (!isRecord(rawSpec)) {
-    throw new Error(`DSH_ORCHESTRATION_MODELS: ${role} must be a "provider/model" string or an object`)
+    throw new Error(`DSH_ROLES_MODELS: ${role} must be a "provider/model" string or an object`)
   }
   for (const key of Object.keys(rawSpec)) {
     if (!ALLOWED_MODEL_ROUTE_KEYS.has(key)) {
-      throw new Error(`DSH_ORCHESTRATION_MODELS: unknown key "${key}" for role "${role}"`)
+      throw new Error(`DSH_ROLES_MODELS: unknown key "${key}" for role "${role}"`)
     }
   }
   const provider = nonEmptyField(role, 'provider', rawSpec.provider)
@@ -247,13 +284,13 @@ function parseRoleModelEntry(role: string, rawSpec: unknown): RoleModelRoute {
   const reasoningEffort = nonEmptyField(role, 'reasoningEffort', rawSpec.reasoningEffort)
   const subagentProvider = nonEmptyField(role, 'subagentProvider', rawSpec.subagentProvider)
   if ((provider !== undefined) !== (model !== undefined)) {
-    throw new Error(`DSH_ORCHESTRATION_MODELS: ${role} requires both "provider" and "model"`)
+    throw new Error(`DSH_ROLES_MODELS: ${role} requires both "provider" and "model"`)
   }
   if (reasoningEffort !== undefined && (provider === undefined || model === undefined)) {
-    throw new Error(`DSH_ORCHESTRATION_MODELS: ${role}.reasoningEffort requires both "provider" and "model"`)
+    throw new Error(`DSH_ROLES_MODELS: ${role}.reasoningEffort requires both "provider" and "model"`)
   }
   if (provider === undefined && model === undefined && subagentProvider === undefined) {
-    throw new Error(`DSH_ORCHESTRATION_MODELS: ${role} must specify at least "provider"/"model" or "subagentProvider"`)
+    throw new Error(`DSH_ROLES_MODELS: ${role} must specify at least "provider"/"model" or "subagentProvider"`)
   }
   return Object.freeze({
     ...(provider === undefined ? {} : { provider }),
@@ -276,25 +313,96 @@ export function parseModelOverrides(raw: unknown): Partial<Record<ConfigurableMo
     try {
       value = JSON.parse(raw)
     } catch {
-      throw new Error('DSH_ORCHESTRATION_MODELS must be valid JSON')
+      throw new Error('DSH_ROLES_MODELS must be valid JSON')
     }
   }
-  if (!isRecord(value)) throw new Error('DSH_ORCHESTRATION_MODELS must be a JSON object')
+  if (!isRecord(value)) throw new Error('DSH_ROLES_MODELS must be a JSON object')
   const overrides: Partial<Record<ConfigurableModelRole, RoleModelRoute>> = {}
   for (const [role, spec] of Object.entries(value)) {
     if (role === 'fork') {
       throw new Error(
-        'DSH_ORCHESTRATION_MODELS: role "fork" always inherits the parent model and local fork provider for KV-cache reuse',
+        'DSH_ROLES_MODELS: role "fork" always inherits the parent model and local fork provider for KV-cache reuse',
       )
     }
     if (!(CONFIGURABLE_MODEL_ROLES as readonly string[]).includes(role)) {
       throw new Error(
-        `DSH_ORCHESTRATION_MODELS: unknown role "${role}"; expected ${CONFIGURABLE_MODEL_ROLES.join(', ')}`,
+        `DSH_ROLES_MODELS: unknown role "${role}"; expected ${CONFIGURABLE_MODEL_ROLES.join(', ')}`,
       )
     }
     overrides[role as ConfigurableModelRole] = parseRoleModelEntry(role, spec)
   }
   return overrides
+}
+
+const ALLOWED_REMINDER_KEYS = new Set(['nudgeInspectionSteps', 'maxNudges', 'catalogRefreshTurns'])
+
+function boundedInteger(field: string, value: unknown, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) {
+    throw new Error(`DSH_ROLES_REMINDERS: ${field} must be an integer between ${min} and ${max}`)
+  }
+  return value
+}
+
+/**
+ * Validate partial reminder threshold overrides (`nudgeInspectionSteps`, `maxNudges`, `catalogRefreshTurns`).
+ * @param raw - parsed JSON, a Loader-row object, or `undefined`.
+ * @returns checked partial override.
+ */
+export function parseReminderOverrides(raw: unknown): ReminderOverrides {
+  if (raw === undefined || raw === null) return {}
+  let value = raw
+  if (typeof raw === 'string') {
+    if (raw.trim() === '') return {}
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      throw new Error('DSH_ROLES_REMINDERS must be valid JSON')
+    }
+  }
+  if (!isRecord(value)) throw new Error('DSH_ROLES_REMINDERS must be a JSON object')
+  for (const key of Object.keys(value)) {
+    if (!ALLOWED_REMINDER_KEYS.has(key)) {
+      throw new Error(`DSH_ROLES_REMINDERS: unknown key "${key}"`)
+    }
+  }
+  const overrides: {
+    nudgeInspectionSteps?: number
+    maxNudges?: number
+    catalogRefreshTurns?: number
+  } = {}
+  if (value.nudgeInspectionSteps !== undefined) {
+    overrides.nudgeInspectionSteps = boundedInteger(
+      'nudgeInspectionSteps',
+      value.nudgeInspectionSteps,
+      MIN_NUDGE_INSPECTION_STEPS,
+      MAX_NUDGE_INSPECTION_STEPS,
+    )
+  }
+  if (value.maxNudges !== undefined) {
+    overrides.maxNudges = boundedInteger('maxNudges', value.maxNudges, 0, MAX_DELEGATION_NUDGES_LIMIT)
+  }
+  if (value.catalogRefreshTurns !== undefined) {
+    overrides.catalogRefreshTurns = boundedInteger(
+      'catalogRefreshTurns',
+      value.catalogRefreshTurns,
+      0,
+      MAX_CATALOG_REFRESH_TURNS,
+    )
+  }
+  return overrides
+}
+
+/**
+ * Merge validated reminder overrides over the shipped defaults.
+ * @param overrides - checked partial override.
+ * @returns complete, frozen reminder configuration.
+ */
+export function resolveReminders(overrides: ReminderOverrides = {}): ReminderConfig {
+  return Object.freeze({
+    nudgeInspectionSteps: overrides.nudgeInspectionSteps ?? DEFAULT_REMINDERS.nudgeInspectionSteps,
+    maxNudges: overrides.maxNudges ?? DEFAULT_REMINDERS.maxNudges,
+    catalogRefreshTurns: overrides.catalogRefreshTurns ?? DEFAULT_REMINDERS.catalogRefreshTurns,
+  })
 }
 
 function route(
@@ -316,19 +424,19 @@ function route(
  * explicitly overridden.
  * @param config - the Loader row configuration (plain or Volatile-wrapped).
  * @param env - process environment, injectable for tests.
- * @returns validated configuration with per-role routes and budgets.
+ * @returns validated configuration with per-role routes, budgets, and reminders.
  */
 export function resolveOrchestrationConfig(
   config: PluginConfigInput = {},
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedConfig {
   const plain = unwrapPluginConfig(config)
-  const envModels = parseModelOverrides(env.DSH_ORCHESTRATION_MODELS)
+  const envModels = parseModelOverrides(env.DSH_ROLES_MODELS)
   const configModels = parseModelOverrides(plain.models)
   const legacyExploreRoute = route(
-    plain.exploreProvider ?? env.DSH_ORCHESTRATION_EXPLORE_PROVIDER,
-    plain.exploreModel ?? env.DSH_ORCHESTRATION_EXPLORE_MODEL,
-    'DSH_ORCHESTRATION_EXPLORE_PROVIDER / DSH_ORCHESTRATION_EXPLORE_MODEL',
+    plain.exploreProvider ?? env.DSH_ROLES_EXPLORE_PROVIDER,
+    plain.exploreModel ?? env.DSH_ROLES_EXPLORE_MODEL,
+    'DSH_ROLES_EXPLORE_PROVIDER / DSH_ROLES_EXPLORE_MODEL',
   )
   const models: ResolvedModels = Object.freeze({
     'general-purpose': configModels['general-purpose'] ?? envModels['general-purpose'],
@@ -340,12 +448,16 @@ export function resolveOrchestrationConfig(
     ? Object.freeze({ provider: models.explore.provider, model: models.explore.model })
     : undefined
   const overrides = plain.budgets === undefined
-    ? parseBudgetOverrides(env.DSH_ORCHESTRATION_BUDGETS)
+    ? parseBudgetOverrides(env.DSH_ROLES_BUDGETS)
     : parseBudgetOverrides(plain.budgets)
+  const reminderOverrides = plain.reminders === undefined
+    ? parseReminderOverrides(env.DSH_ROLES_REMINDERS)
+    : parseReminderOverrides(plain.reminders)
   return Object.freeze({
     exploreRoute,
     models,
     budgets: resolveBudgets(overrides),
+    reminders: resolveReminders(reminderOverrides),
   })
 }
 

@@ -1,4 +1,4 @@
-/** Browser plugin entry registering `dsh-orchestration`'s configuration page into `plugins.bundle.config`. */
+/** Browser plugin entry registering `dsh-roles`'s configuration page into `plugins.bundle.config`. */
 
 import type { BrowserClientContext } from './browser-types.js'
 import { OrchestrationSettingsController, ORCHESTRATION_NS } from './controller.js'
@@ -10,7 +10,7 @@ import type { OrchestrationCardFace } from './OrchestrationSettingsCard.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    dshOrchestration: OrchestrationLocaleKey
+    dshRoles: OrchestrationLocaleKey
   }
 }
 
@@ -42,11 +42,11 @@ export { NS, en, zh } from './locales.js'
 export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.session', 'configForms']
 
 /**
- * Mount the `dsh-orchestration` configuration form on the DSH Plugins page.
+ * Mount the `dsh-roles` configuration form on the DSH Plugins page.
  * @param ctx - browser plugin context.
  */
 export function apply(ctx: BrowserClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-orchestration: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-roles: dictionaries')
 
   const controller = new OrchestrationSettingsController(
     ctx.configForms.get<OrchestrationFormValues>(ORCHESTRATION_NS),
@@ -57,7 +57,7 @@ export function apply(ctx: BrowserClientContext): void {
         return res.value
       },
       loadHostOptions: async () => {
-        const res = await ctx.connection.rpc.call('/dsh-orchestration', 'options', {})
+        const res = await ctx.connection.rpc.call('/dsh-roles', 'options', {})
         if (!res.ok) throw new Error(res.error.message)
         const value = res.value as Partial<HostOptionsView> | undefined
         return {
@@ -68,27 +68,27 @@ export function apply(ctx: BrowserClientContext): void {
     },
   )
 
-  ctx.effect(() => () => { controller.dispose() }, 'dsh-orchestration: controller')
+  ctx.effect(() => () => { controller.dispose() }, 'dsh-roles: controller')
 
   ctx.effect(() => ctx.remote.$on('llm/adapters-updated', () => {
     void controller.refreshCatalog()
-  }), 'dsh-orchestration: adapter invalidations')
+  }), 'dsh-roles: adapter invalidations')
 
   ctx.effect(() => ctx.remote.$on('llm/models-updated', () => {
     void controller.refreshCatalog()
-  }), 'dsh-orchestration: model invalidations')
+  }), 'dsh-roles: model invalidations')
 
   ctx.effect(() => ctx.remote.$on('settings/document-updated', () => {
     void controller.refreshCatalog()
-  }), 'dsh-orchestration: settings invalidations')
+  }), 'dsh-roles: settings invalidations')
 
   ctx.effect(() => ctx.remote.$on('plugin-manager/changed', () => {
     void controller.refreshCatalog()
-  }), 'dsh-orchestration: plugin invalidations')
+  }), 'dsh-roles: plugin invalidations')
 
   ctx.effect(() => ctx.on('connection/reset', () => {
     controller.resetConnection()
-  }), 'dsh-orchestration: connection reset')
+  }), 'dsh-roles: connection reset')
 
   const face: OrchestrationCardFace = {
     hooks: { orchestrationCard: controller.card },
@@ -109,5 +109,5 @@ export function apply(ctx: BrowserClientContext): void {
         inject: () => face,
       }, OrchestrationSettingsCard),
     ),
-  ), 'dsh-orchestration: bundle config page')
+  ), 'dsh-roles: bundle config page')
 }

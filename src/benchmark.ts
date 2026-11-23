@@ -5,7 +5,7 @@
  * `type === 'assistant/message'` usage, and `orchestrate_subagent` tool calls,
  * so a baseline run (plugin disabled) and an enabled run can be compared with
  * the same code path.
- * @module dsh-orchestration/benchmark
+ * @module dsh-roles/benchmark
  */
 
 import { zstdDecompressSync } from 'node:zlib'

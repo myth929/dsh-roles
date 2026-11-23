@@ -5,7 +5,7 @@
  * `apply_patch` targets that resolve outside the declared workspace prefixes,
  * including paths that escape through symlinks. Shell commands are not
  * path-inspected; see the package README for that boundary.
- * @module dsh-orchestration/scope
+ * @module dsh-roles/scope
  */
 
 import { existsSync, realpathSync } from 'node:fs'

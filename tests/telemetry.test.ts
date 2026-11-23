@@ -61,8 +61,8 @@ describe('delegation telemetry', () => {
     const record = settleDelegation(begun(), 'completed', 2000)
     const text = [
       'noise',
-      `2026-11-17 [dsh-orchestration] telemetry ${JSON.stringify(record)}`,
-      '2026-11-17 [dsh-orchestration] telemetry {"truncated":',
+      `2026-11-17 [dsh-roles] telemetry ${JSON.stringify(record)}`,
+      '2026-11-17 [dsh-roles] telemetry {"truncated":',
     ].join('\n')
     expect(parseTelemetryLines(text)).toHaveLength(1)
     expect(parseTelemetryLines(text)[0]?.childId).toBe('child-1')

@@ -1,10 +1,11 @@
 /**
  * Lightweight delegation telemetry: accumulate only values the transport
  * actually reported, and summarize settled records for benchmark reports.
- * @module dsh-orchestration/telemetry
+ * @module dsh-roles/telemetry
  */
 
 import type { OrchestrationRole, Thoroughness } from './config.js'
+import type { IsolationMode } from './worktree.js'
 
 /** Observed token counters; a field stays `null` until a source reports it. */
 export interface DelegationUsage {
@@ -26,6 +27,8 @@ export interface DelegationRecord {
   readonly steps: number
   readonly stopReason: string
   readonly usage: DelegationUsage
+  readonly readOnly?: boolean
+  readonly isolation?: IsolationMode
 }
 
 /** Aggregate view used by reports. */
@@ -49,6 +52,8 @@ export interface DelegationState {
   readonly usage: DelegationUsage
   settled: boolean
   budgetExhausted: boolean
+  readonly readOnly?: boolean
+  readonly isolation?: IsolationMode
 }
 
 /**
@@ -63,6 +68,8 @@ export function startDelegation(input: {
   provider: string
   childId: string
   startedAt: number
+  readOnly?: boolean
+  isolation?: IsolationMode
 }): DelegationState {
   return {
     ...input,
@@ -120,6 +127,8 @@ export function settleDelegation(state: DelegationState, stopReason: string, end
     steps: state.steps,
     stopReason,
     usage: Object.freeze({ ...state.usage }),
+    ...(state.readOnly === true ? { readOnly: true } : {}),
+    ...(state.isolation !== undefined && state.isolation !== 'none' ? { isolation: state.isolation } : {}),
   })
 }
 
@@ -159,7 +168,7 @@ export function summarizeDelegations(records: readonly DelegationRecord[]): Dele
   })
 }
 
-const TELEMETRY_PREFIX = '[dsh-orchestration] telemetry '
+const TELEMETRY_PREFIX = '[dsh-roles] telemetry '
 
 /**
  * Extract delegation records from plugin log text.

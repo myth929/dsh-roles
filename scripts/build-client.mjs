@@ -40,7 +40,7 @@ const result = await esbuild.build({
 
 assert.equal(result.outputFiles.length, 1, 'esbuild must emit exactly one client bundle output')
 const bundledCode = result.outputFiles[0].text
-const wrapped = `window.__ModuleLoader__.load({id:"dsh-orchestration",factory:(require)=>{var module={exports:{}};var exports=module.exports;\n${bundledCode}\nreturn module.exports;}});\n`
+const wrapped = `window.__ModuleLoader__.load({id:"dsh-roles",factory:(require)=>{var module={exports:{}};var exports=module.exports;\n${bundledCode}\nreturn module.exports;}});\n`
 
 mkdirSync(dirname(outFile), { recursive: true })
 writeFileSync(outFile, wrapped, 'utf8')
@@ -60,7 +60,7 @@ const sandbox = {
 sandbox.globalThis = sandbox
 
 vm.runInNewContext(wrapped, sandbox, { filename: 'lib/client.js' })
-assert(registration && registration.id === 'dsh-orchestration', 'bundle must register id "dsh-orchestration"')
+assert(registration && registration.id === 'dsh-roles', 'bundle must register id "dsh-roles"')
 assert.equal(typeof registration.factory, 'function', 'bundle must provide a factory function')
 
 const stubRequire = (specifier) => {

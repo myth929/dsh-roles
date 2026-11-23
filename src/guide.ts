@@ -4,7 +4,7 @@
  * Mirrors Claude Code's `claude-code-guide` environment footer while also
  * surfacing locally installed `@deepseek-ai/*` package docs and type
  * declarations so DSH questions are grounded without guessing from memory.
- * @module dsh-orchestration/guide
+ * @module dsh-roles/guide
  */
 
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
@@ -443,7 +443,7 @@ export async function buildDshGuideContext(
   if (mcpServers.length > 0) {
     lines.push(`- **Configured MCP servers**: ${mcpServers.join(', ')}`)
   }
-  lines.push(`- **dsh-orchestration settings**: models=${JSON.stringify(config.models)}; budgets=${JSON.stringify(config.budgets)}`)
+  lines.push(`- **dsh-roles settings**: models=${JSON.stringify(config.models)}; budgets=${JSON.stringify(config.budgets)}`)
   lines.push('')
   lines.push(`## Installed \`@deepseek-ai/*\` Packages (${listedPackages.length} of ${packages.length} shown)`)
   if (listedPackages.length === 0) {

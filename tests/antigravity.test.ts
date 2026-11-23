@@ -6,6 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ResolvedSubagentStartRequest, SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import {
   ANTIGRAVITY_OAR_PROVIDER_NAME,
+  DEFAULT_ANTIGRAVITY_TIMEOUT_MS,
   findAntigravityExecutable,
   hasOfficialAntigravityOar,
   isSupportedAntigravityVersion,
@@ -217,6 +218,7 @@ describe('antigravity OAR fallback provider', () => {
   it('completes a one-shot ACP turn and streams agent_message_chunk output', async () => {
     const run = await startAntigravityOarRun(startRequest('hello antigravity'), {
       command: mockAgyPath,
+      timeoutMs: null,
     })
     const result = await run.result
     expect(result).toEqual({
@@ -254,6 +256,7 @@ describe('antigravity OAR fallback provider', () => {
   })
 
   it('enforces optional timeoutMs and settles with a timeout diagnostic', async () => {
+    expect(DEFAULT_ANTIGRAVITY_TIMEOUT_MS).toBe(5 * 60 * 1000)
     const run = await startAntigravityOarRun(startRequest('slow work'), {
       command: mockAgyPath,
       env: { MOCK_ACP_MODE: 'hang' },

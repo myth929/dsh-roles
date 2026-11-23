@@ -1,4 +1,4 @@
-/** Browser configuration card rendered on the Plugins page for `dsh-orchestration`. */
+/** Browser configuration card rendered on the Plugins page for `dsh-roles`. */
 
 import { useId } from 'react'
 import { SettingsForm, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -12,7 +12,7 @@ import type { ConfigurableRole, OrchestrationCardState } from './controller.js'
 import { formLabels, NS } from './locales.js'
 import type { OrchestrationLocaleKey } from './locales.js'
 
-const CSS_TAG_ID = 'dsh-orchestration/OrchestrationSettingsCard'
+const CSS_TAG_ID = 'dsh-roles/OrchestrationSettingsCard'
 
 const CARD_CSS = `
 .dsh-orch-section {
@@ -363,7 +363,7 @@ function ensureStylesInjected(): void {
     return
   }
   const tag = document.createElement('style')
-  tag.dataset.plugin = 'dsh-orchestration'
+  tag.dataset.plugin = 'dsh-roles'
   tag.dataset.pluginCss = CSS_TAG_ID
   tag.textContent = CARD_CSS
   document.head.appendChild(tag)

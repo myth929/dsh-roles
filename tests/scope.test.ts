@@ -13,7 +13,7 @@ import {
 let directory: string
 
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), 'dsh-orchestration-scope-'))
+  directory = mkdtempSync(join(tmpdir(), 'dsh-roles-scope-'))
 })
 afterEach(() => rmSync(directory, { recursive: true, force: true }))
 

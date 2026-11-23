@@ -8,6 +8,39 @@ importers:
 
   .:
     dependencies:
+      '@deepseek-ai/dsh-agent-instructions':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(6759f8caa5fa5ee07e53c56b44ac8f53)
+      '@deepseek-ai/dsh-agent-preset':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(@deepseek-ai/cordis-plugin-loader@1.1.0)(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-agent-preset-registry@0.2.2-rc.3(dee4d4b0c7ff79257ff68d37b32735e9))
+      '@deepseek-ai/dsh-compaction-tool-result-pruner':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-compaction@0.2.2-rc.3(4cf4eba57cbd282a901adddf84897a0c))(@deepseek-ai/dsh-llm@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-session@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-token-meter@0.2.2-rc.3(f1c2ec7e18ff6b9cfa500a294138ff33))
+      '@deepseek-ai/dsh-time-context':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-agent@0.2.2-rc.3(cbef900d773c0d0ee336f7e4f4030cb2))(@deepseek-ai/dsh-llm@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-session-projection@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-session@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0))))(@deepseek-ai/dsh-session@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-util-time@0.2.2-rc.3(@deepseek-ai/cordis@4.1.0))
+      '@deepseek-ai/dsh-tool-bash':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(071e6a681b63841b7f628f9b7d4832dd)
+      '@deepseek-ai/dsh-tool-fs':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(fc0a8948821fb8a923e088aa44c86937)
+      '@deepseek-ai/dsh-tool-fs-search':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(1ad6799832409e27506cd8ef0306be19)
+      '@deepseek-ai/dsh-tool-jobs':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(9857ac9391d4d9e9b8a2677498fc810e)
+      '@deepseek-ai/dsh-tool-pwsh':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(071e6a681b63841b7f628f9b7d4832dd)
+      '@deepseek-ai/dsh-tool-todo':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(f1fabf6b75a09d8b229f063f10906fce)
+      '@deepseek-ai/dsh-tool-web':
+        specifier: '>=0.2.2-rc.1'
+        version: 0.2.2-rc.3(ee32b57d159550f8250555a2671cc759)
       '@deepseek-ai/schemastery':
         specifier: ^3.19.0
         version: 3.19.0

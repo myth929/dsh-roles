@@ -1,9 +1,9 @@
-/** Staged configuration controller for the `dsh-orchestration` plugin page. */
+/** Staged configuration controller for the `dsh-roles` plugin page. */
 
 import type { SettingsFormPathOp, SettingsFormScope, SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-ui-slots'
 
-export const ORCHESTRATION_NS = 'dsh-orchestration'
+export const ORCHESTRATION_NS = 'dsh-roles'
 export const CONFIGURABLE_ROLES = ['general-purpose', 'explore', 'plan', 'dsh-code-guide'] as const
 export type ConfigurableRole = typeof CONFIGURABLE_ROLES[number]
 
