@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Subagent Role Orchestration",
+    "title": "dsh-roles",
     "description": "Role-layered subagent orchestration with per-role context/tool isolation, model routing, and OAR runtime selection."
   }
 }

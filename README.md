@@ -3,7 +3,6 @@
 [English](https://github.com/myth929/dsh-roles/blob/main/README.md) · [简体中文](https://github.com/myth929/dsh-roles/blob/main/README_zh.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-roles)](https://www.npmjs.com/package/dsh-roles)
-[![GitHub stars](https://img.shields.io/github/stars/myth929/dsh-roles?style=social)](https://github.com/myth929/dsh-roles)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/myth929/dsh-roles/blob/main/LICENSE)
 
 **Role-layered subagent orchestration plugin for [DeepSeek Harness](https://www.deepseek.com/harness/) (`DSH >=0.2.2-rc.1`).**
