@@ -52,6 +52,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "engines": {
+      "dsh": ">=0.2.2-rc.1"
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -69,6 +72,7 @@
   "files": [
     "lib",
     "locale",
+    "assets",
     "cordis.patch.yml",
     "README*.md",
     "CHANGELOG.md",
