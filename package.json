@@ -1,6 +1,6 @@
 {
   "name": "dsh-roles",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Standalone DeepSeek Harness bundle for role-layered subagent orchestration with per-role context slimming, bounded step budgets, write-scope enforcement, and delegation telemetry.",
   "license": "MIT",
   "author": "myth929",
