@@ -10,7 +10,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -54,3 +54,39 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists, skipping."
+            exit 0
+          fi
+
+          PRERELEASE_FLAG=""
+          if [[ "$TAG" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          VERSION="${TAG#v}"
+          NOTES_FILE="$(mktemp)"
+          node -e '
+            const fs = require("node:fs");
+            const ver = process.argv[1];
+            const out = process.argv[2];
+            if (!fs.existsSync("CHANGELOG.md")) process.exit(1);
+            const md = fs.readFileSync("CHANGELOG.md", "utf8");
+            const escaped = ver.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const match = md.match(new RegExp(`(?:^|\\r?\\n)## \\[${escaped}\\][^\\r\\n]*\\r?\\n([\\s\\S]*?)(?=\\r?\\n## \\[|$)`));
+            const body = match ? match[1].trim() : "";
+            if (!body) process.exit(1);
+            fs.writeFileSync(out, body + "\n");
+          ' "$VERSION" "$NOTES_FILE" && HAS_NOTES=1 || HAS_NOTES=0
+
+          if [ "$HAS_NOTES" -eq 1 ]; then
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$NOTES_FILE" $PRERELEASE_FLAG
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes $PRERELEASE_FLAG
+          fi
