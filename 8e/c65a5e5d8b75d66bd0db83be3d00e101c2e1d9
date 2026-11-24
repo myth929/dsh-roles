@@ -1,0 +1,14 @@
+package.json
+  h_99f5666d280fa2 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "8ec65a5e5d8b75d66bd0db83be3d00e101c2e1d9",
+  "prompts": {},
+  "humans": {
+    "h_99f5666d280fa2": {
+      "author": "myth929 <422896780@qq.com>"
+    }
+  }
+}
