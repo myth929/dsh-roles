@@ -1,0 +1,14 @@
+.github/workflows/release.yml
+  h_99f5666d280fa2 13,57-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "abf0f50bce0ec46a9dca6d315f92581c4a9cde39",
+  "prompts": {},
+  "humans": {
+    "h_99f5666d280fa2": {
+      "author": "myth929 <422896780@qq.com>"
+    }
+  }
+}
