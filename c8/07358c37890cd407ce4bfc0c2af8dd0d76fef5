@@ -1,0 +1,20 @@
+README.md
+  h_99f5666d280fa2 1-2,4,6-9,11-15,17-20,22-32,54-55,82,86-87,100
+README_zh.md
+  h_99f5666d280fa2 1-2,4,6-9,11-15,17-20,22-32,54-55,82,87,100
+package.json
+  h_99f5666d280fa2 55-57,75
+screenshots.json
+  h_99f5666d280fa2 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "c807358c37890cd407ce4bfc0c2af8dd0d76fef5",
+  "prompts": {},
+  "humans": {
+    "h_99f5666d280fa2": {
+      "author": "myth929 <422896780@qq.com>"
+    }
+  }
+}
